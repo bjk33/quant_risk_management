@@ -278,13 +278,13 @@ plt.show()
 data3 = pd.read_csv('problem3.csv')
 time_series = data3.iloc[:, 0]
 
-# Fit AR(1) through AR(3)
+# Fit AR(1) through AR(3) models and print AICs
 for p in range(1, 4):  # AR(1) through AR(3)
     model = ARIMA(time_series, order=(p, 0, 0))
     results = model.fit()
     print(f'AR({p}) AIC: {results.aic}')
 
-# Fit MA(1) through MA(3) models
+# Fit MA(1) through MA(3) models and print AICs
 for q in range(1, 4):  # MA(1) through MA(3)
     model = ARIMA(time_series, order=(0, 0, q))
     results = model.fit()
