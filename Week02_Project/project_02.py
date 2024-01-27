@@ -44,19 +44,19 @@ var = np.var(data1_corrected, ddof=1)  # unbiased (divide by n-1)
 skewness = skew(data1_corrected, bias=False)  # unbiased
 kurtosis = kurtosis(data1_corrected, bias=False)  # unbiased
 
-print("Scipy Mean:", mean)
+print("SciPy Mean:", mean)
 
-print("Scipy Biased Variance:", var_biased)
-print("Scipy Biased Skewness:", skewness_biased)
-print("Scipy Biased Kurtosis:", kurtosis_biased)
+print("NumPy Biased Variance:", var_biased)
+print("SciPy Biased Skewness:", skewness_biased)
+print("SciPy Biased Kurtosis:", kurtosis_biased)
 
-print("Scipy Unbiased Variance:", var)
-print("Scipy Unbiased Skewness:", skewness)
-print("Scipy Unbiased Kurtosis:", kurtosis)
+print("SciPy Unbiased Variance:", var)
+print("SciPy Unbiased Skewness:", skewness)
+print("SciPy Unbiased Kurtosis:", kurtosis)
 
 # c) Is Your Statistical Package Function Biased?
 
-# Difference between moments calculated by formula and biased moments calculated using scipy
+# Difference between moments calculated by formula and biased moments calculated using SciPy
 
 difference_sigma_2_hat = sigma_2_hat - var_biased
 difference_skew_hat = skew_hat - skewness_biased
@@ -66,15 +66,20 @@ print("Difference Between Formula and Biased Variance:", difference_sigma_2_hat)
 print("Difference Between Formula and Biased Skewness:", difference_skew_hat)
 print("Difference Between Formula and Biased Kurtoses:", difference_kurtosis_hat)
 
-# Difference between unbiased and biased moments calculated using scipy
+# Difference between unbiased and biased moments calculated using Scipy
 
 difference_var = var - var_biased
 difference_skewness = skewness - skewness_biased
 difference_kurtosis = kurtosis - kurtosis_biased
 
-print("Difference Between Scipy Calculated Variances:", difference_var)
-print("Difference Between Scipy Calculated Skewnesses:", difference_skewness)
-print("Difference Between Scipy Calculated Kurtoses:", difference_kurtosis)
+print("Difference Between SciPy Calculated Variances:", difference_var)
+print("Difference Between SciPy Calculated Skewnesses:", difference_skewness)
+print("Difference Between SciPy Calculated Kurtoses:", difference_kurtosis)
+
+# Difference between formula and unbiased moments calculated using SciPy
+print("Difference Between Formula and Unbiased Variances:", sigma_2_hat - var)
+print("Difference Between Formula and Unbiased Skewness:", skew_hat - skewness)
+print("Difference Between Formula and Unbiased Kurtoses:", kurtosis_hat - kurtosis)
 
 # Problem 2 #
 
@@ -164,7 +169,7 @@ def negative_log_likelihood_t(params, x, y):
     rv = t(df)
     log_likelihood = rv.logpdf((y - y_pred) / sigma_t) - np.log(sigma_t)
 
-    return -np.sum(log_likelihood)  # negate the negative log likelihood to get log likelihood
+    return -np.sum(log_likelihood)  # negate the log likelihood to get the negative log likelihood
 
 
 # Initial parameter estimates: OLS estimates for beta, and initial guesses for sigma and df
@@ -252,7 +257,7 @@ cov_X1_X2 = cov[0, 1]
 conditional_means = mean_X2 + cov_X1_X2 / cov_X1_X1 * (X1 - mean_X1)
 conditional_var = cov_X2_X2 - cov_X1_X2 ** 2 / cov_X1_X1
 
-# Flatten X1 and conditional_means, ensuring it is one-dimensional for plt.errorbar
+# Flatten X1 and conditional_means, ensuring they are one-dimensional for plt.errorbar
 X1_flat = X1.flatten()
 conditional_means_flat = conditional_means.flatten()
 
