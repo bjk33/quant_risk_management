@@ -5,7 +5,7 @@ from scipy.stats import skew, kurtosis, norm, t, multivariate_normal
 import statsmodels.api as sm
 from scipy.optimize import minimize
 import matplotlib.pyplot as plt
-from statsmodels.tsa.arima_model import ARIMA
+from statsmodels.tsa.arima.model import ARIMA
 
 
 # Problem 1 #
@@ -274,3 +274,18 @@ plt.show()
 
 # Fit Data Using AR(1) Through AR(3) and MA(1) Through MA(3) respectively. Which is the Best of Fit?
 
+# Read and load data
+data3 = pd.read_csv('problem3.csv')
+time_series = data3.iloc[:, 0]
+
+# Fit AR(1) through AR(3)
+for p in range(1, 4):  # AR(1) through AR(3)
+    model = ARIMA(time_series, order=(p, 0, 0))
+    results = model.fit()
+    print(f'AR({p}) AIC: {results.aic}')
+
+# Fit MA(1) through MA(3) models
+for q in range(1, 4):  # MA(1) through MA(3)
+    model = ARIMA(time_series, order=(0, 0, q))
+    results = model.fit()
+    print(f'MA({q}) AIC: {results.aic}')
