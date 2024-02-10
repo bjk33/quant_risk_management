@@ -38,6 +38,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/Week03_Project/DailyReturn.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
       </map>
     </option>
   </component>
