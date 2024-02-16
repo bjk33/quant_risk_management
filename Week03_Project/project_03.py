@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 # Problem 1 #
 
@@ -316,8 +317,8 @@ def higham_nearestPSD(pc, W=None, epsilon=1e-9, maxIter=100, tol=1e-9):
         print("Convergence failed after {} iterations".format(i - 1))
     return Yk
 
-# Use near_psd() and Higham's method to fix a non-PSD correlation matrix.
 
+# Use near_psd() and Higham's method to fix a non-PSD correlation matrix.
 
 n = 500
 sigma = np.full((n, n), 0.9)  # Create an n x n matrix filled with 0.9
@@ -333,4 +334,164 @@ W = np.diag(np.ones(n))  # Create an identity weight matrix
 
 hnpsd = higham_nearestPSD(sigma)
 npsd = near_psd(sigma)
+
+# Confirm whether sigma is now PSD
+
+
+def is_psd(A, tol=1e-9):
+    """
+    Returns true if A is a PSD matrix
+    :param: A: correlation matrix we want to confirm is PSD
+    :param: tol: tolerance to check value of eigenvalues against. If the eigenvalues are all greater than the negative of
+    the tolerance, we consider the correlation matrix PSD.
+    :returns: Boolean indicating whether A is a PSD matrix
+    """
+    eigenvalues = np.linalg.eigvalsh(A)
+    return np.all(eigenvalues > -tol)
+
+
+is_psd_hnpsd = is_psd(hnpsd)
+is_psd_npsd = is_psd(npsd)
+
+print("Is hnpsd PSD:", is_psd_hnpsd)
+print("Is npsd PSD:", is_psd_npsd)
+
+norm_hnpsd = wgtNorm(hnpsd-sigma, W)
+norm_npsd = wgtNorm(npsd-sigma, W)
+print("Distance of near_psd() for n=500:",norm_npsd)
+print("Distance of higham_nearestPSd() for n=500:",norm_hnpsd)
+
+# Measuring runtime for near_psd() with n=500
+start_time = time.time()
+npsd_result_500 = near_psd(sigma)
+end_time = time.time()
+near_psd_runtime = end_time - start_time
+
+print("Runtime for near_psd() for n=500: {:.6f} seconds".format(near_psd_runtime))
+
+# Measuring runtime for higham_nearestPSD() with n=500
+start_time = time.time()
+hnpsd_result_500 = higham_nearestPSD(sigma)
+end_time = time.time()
+higham_nearestPSD_runtime = end_time - start_time
+
+print("Runtime for higham_nearestPSD() for n=500: {:.6f} seconds".format(higham_nearestPSD_runtime))
+
+# Comparing Froebenius norm and runtime when n=1000
+n = 1000
+sigma_2 = np.full((n, n), 0.9)  # Create an n x n matrix filled with 0.9
+for i in range(n):
+    sigma_2[i, i] = 1.0  # Set diagonal elements to 1.0
+
+sigma_2[0, 1] = 0.7357  # Adjust indices for zero-based indexing
+sigma_2[1, 0] = 0.7357
+
+W = np.diag(np.ones(n))  # Create an identity weight matrix
+
+hnpsd_1000 = higham_nearestPSD(sigma_2)
+npsd_1000 = near_psd(sigma_2)
+
+is_psd_hnpsd_1000 = is_psd(hnpsd_1000)
+is_psd_npsd_1000 = is_psd(npsd_1000)
+
+print("Is hnpsd_1000 PSD:", is_psd_hnpsd)
+print("Is npsd_1000 PSD:", is_psd_npsd)
+
+norm_hnpsd_1000 = wgtNorm(hnpsd_1000-sigma_2, W)
+norm_npsd_1000 = wgtNorm(npsd_1000-sigma_2, W)
+print("Distance of near_psd() for n=1000:",norm_npsd_1000)
+print("Distance of higham_nearestPSd() for n=1000:",norm_hnpsd_1000)
+
+# Measuring runtime for near_psd() with n=1000
+start_time = time.time()
+npsd_result_1000 = near_psd(sigma_2)
+end_time = time.time()
+near_psd_runtime_1000 = end_time - start_time
+
+print("Runtime for near_psd() for n=1000: {:.6f} seconds".format(near_psd_runtime_1000))
+
+# Measuring runtime for higham_nearestPSD() with n=1000
+start_time = time.time()
+hnpsd_result_1000 = higham_nearestPSD(sigma_2)
+end_time = time.time()
+higham_nearestPSD_runtime_1000 = end_time - start_time
+
+print("Runtime for higham_nearestPSD() for n=1000: {:.6f} seconds".format(higham_nearestPSD_runtime_1000))
+
+
+"""
+The Higham Nearest PSD method is clearly much slower than naive Nearest PSD, but also much more accurate. There is thus
+a trade off between computational time and computational precision. In practice for fast calculations where pretty close
+is "good enough" then I would use near_psd(). If you have more time and compute, and a more exact approximation is
+important use higham_nearestPSD(). Also note that as n increases, there is not much change in accuracy of 
+higham_nearestPSD(). It is about as accurate on n=500 and n=1000. On the other hand, the Froebenius norm for
+nearest_psd() roughly doubles between n=500 and n=1000. Whether this increase is statistically significant is a question
+that deserves further exploration. Moreover, the runtime for nearest_psd() roughly doubles when the size of the matrix
+to approximate doubles. However, the runtime for higham_nearestPSD() roughly quadrupled between n=500 and n=1000. 
+"""
+
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+
+# Example sizes to test
+sizes = [500, 1000, 1500, 2000, 2500]  # Adjust this list as needed
+
+# List to store the results
+results_data = []
+
+for n in sizes:
+    sigma = np.full((n, n), 0.9)
+    np.fill_diagonal(sigma, 1.0)
+    sigma[0, 1] = sigma[1, 0] = 0.7357
+
+    # Update the size of W to match the size of sigma
+    W = np.diag(np.ones(n))
+
+    # Run near_psd
+    start_time = time.time()
+    npsd_result = near_psd(sigma)
+    runtime_npsd = time.time() - start_time
+    error_npsd = wgtNorm(npsd_result - sigma, W)
+
+    # Run higham_nearestPSD
+    start_time = time.time()
+    hnpsd_result = higham_nearestPSD(sigma)
+    runtime_hnpsd = time.time() - start_time
+    error_hnpsd = wgtNorm(hnpsd_result - sigma, W)
+
+    # Add results to the list
+    results_data.append({'Size': n, 'Method': 'near_psd', 'Runtime': runtime_npsd, 'Error': error_npsd})
+    results_data.append({'Size': n, 'Method': 'higham_nearestPSD', 'Runtime': runtime_hnpsd, 'Error': error_hnpsd})
+
+# Create DataFrame from the list
+results = pd.DataFrame(results_data)
+
+# Plotting
+plt.figure(figsize=(12, 6))
+
+# Plot for Runtime
+plt.subplot(1, 2, 1)
+for method in ['near_psd', 'higham_nearestPSD']:
+    subset = results[results['Method'] == method]
+    plt.plot(subset['Size'], subset['Runtime'], label=method)
+plt.xlabel('Matrix Size')
+plt.ylabel('Runtime (seconds)')
+plt.title('Runtime vs Matrix Size')
+plt.legend()
+
+# Plot for Error
+plt.subplot(1, 2, 2)
+for method in ['near_psd', 'higham_nearestPSD']:
+    subset = results[results['Method'] == method]
+    plt.plot(subset['Size'], subset['Error'], label=method)
+plt.xlabel('Matrix Size')
+plt.ylabel('Error')
+plt.title('Error vs Matrix Size')
+plt.legend()
+
+plt.tight_layout()
+plt.show()
 
