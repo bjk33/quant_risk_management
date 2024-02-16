@@ -430,6 +430,7 @@ that deserves further exploration. Moreover, the runtime for nearest_psd() rough
 to approximate doubles. However, the runtime for higham_nearestPSD() roughly quadrupled between n=500 and n=1000. 
 """
 
+# Visualizing this trade-off for larger n
 
 import pandas as pd
 import numpy as np
