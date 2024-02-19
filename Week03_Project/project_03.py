@@ -706,12 +706,9 @@ runtime_plot = sns.barplot(
     ci=None
 )
 
-# Get the unique values from the 'Simulation' column in the order they're plotted
-unique_simulations = out_table_sorted['Simulation'].unique()
-
 # Set the positions for the x-ticks at the center of each group
-# Use the unique values from 'Simulation' as the labels
-plt.xticks(ticks=np.arange(len(unique_simulations)), labels=unique_simulations, rotation=45)
+# Set the custom labels for these x-tick positions
+plt.xticks(ticks=np.arange(len(correct_labels)), labels=correct_labels, rotation=45)
 
 # Set the title and labels for the plot
 runtime_plot.set_title('Simulation Runtime Comparison')
@@ -724,15 +721,6 @@ plt.show()
 
 
 # Norm Plot
-
-# Correct labels for the x-axis
-correct_labels = ['Direct', 'PCA: pctExp=1', 'PCA: pctExp=0.75', 'PCA: pctExp=0.5']
-
-# Sort 'Simulation' column to control the order of the x-axis categories
-out_table['Simulation'] = pd.Categorical(out_table['Simulation'], categories=correct_labels, ordered=True)
-
-# Sort the DataFrame based on 'Simulation' to ensure correct grouping
-out_table_sorted = out_table.sort_values('Simulation')
 
 # Accuracy Plot
 plt.figure(figsize=(12, 6))
@@ -758,4 +746,19 @@ plt.tight_layout()
 plt.show()
 
 
-
+"""
+Overall, the direct simulation took the most time to run, followed by the PCA with 100% of the variance explained by
+the principal components, followed by the PCA with 75% of the variance explained by the principal components, followed
+by the PCA with 50% of the variance explained by the principal components. The direct simulation and the PCA with 100%
+explained took significantly longer than the other two PCA simulations. The PCA with 100% explained took slightly faster
+than the direct simulation. In terms of accuracy, the direct simulation had the greatest Froebenius norms for each 
+matrix. Thus in the case of direct simulation, the longer run time was not a trade off with the accuracy of the
+simulation. The direct simulation simply takes the longest and is the least accurate because of its design and 
+methodology. Of the three PCA simulations, the PCA with 100% explained was the most accurate, followed by the PCA with
+75% explained, followed by the PCA with 50% explained. However, the differences in accuracy between the 100%, 75%, and 
+50% PCA might be considered negligible. With respect to the differences in their run times I would prefer the 50% PCA
+because it was more efficient than it was less accurate relative to the 75% and 100% PCA. Additionally, it seems like 
+the exponentially weighted moving average covariance matrix and the Pearson correlation plus exponentially weight moving 
+average standard deviation matrices were simulated most accurately. However, the run time to simulate all four was 
+largely the same.
+"""
