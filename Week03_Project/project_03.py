@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 import time
+from scipy import stats
 
 # Problem 1 #
 
@@ -10,7 +12,13 @@ import time
 # Load and clean data
 daily_return_path = '/Users/brandonkaplan/Desktop/FINTECH545/Week03_Project/DailyReturn.csv'
 daily_returns = pd.read_csv(daily_return_path)
+daily_returns = daily_returns[daily_returns['SPY'].notna()] # Filter out rows where 'SPY' column is missing
 daily_returns = daily_returns.drop(daily_returns.columns[0], axis=1)  # drop indices
+
+for col in daily_returns.columns:
+    # Assuming you want to convert all columns except 'SPY'
+    if col != 'SPY':
+        daily_returns[col] = pd.to_numeric(daily_returns[col], errors='coerce')
 
 # Create function for calculating exponentially weighted covariance matrix
 
@@ -36,7 +44,7 @@ def ewCovar(x, lambda_):
 
     # Step 4: Compute the covariance matrix: covariance[i,j] = (w dot x)' * x where dot denotes element-wise mult
     weighted_x = x * weights[:, np.newaxis]  # broadcast weights to each row
-    cov_matrix = np.dot(weighted_x, weighted_x.T)  # compute the matrix product
+    cov_matrix = np.dot(weighted_x.T, weighted_x)  # compute the matrix product
     return cov_matrix
 
 
@@ -495,4 +503,259 @@ plt.legend()
 
 plt.tight_layout()
 plt.show()
+
+# Problem 3 #
+
+# Implementing a multivariate normal simulation directly from covariance matrix and using PCA
+
+# Directly from covariance matrix
+
+
+def simulate_normal(N, cov, mean=None, seed=1234):
+    """
+    Simulate a  multivariate normal distribution directly from a covariance matrix. We use chol_psd() to Cholesky
+    factorize an input covariance matrix. This is used to transform standard normal variables into variables with the
+    desired covariance structure.
+    :param N: The number of samples to generate
+    :param cov: The covariance matrix based on which the multivariate normal samples are generated
+    :param mean: An optional mean vector to use. If not provided the mean is zero
+    :param seed: An optional seed to use for the random number generation in order to ensure reproducibility
+    :return: out.T: The matrix of generated samples
+    """
+    n, m = cov.shape
+    if n != m:
+        raise ValueError(f"Covariance Matrix is not square ({n},{m})")
+
+    if mean is None:
+        mean = np.zeros(n)
+    elif len(mean) != n:
+        raise ValueError(f"Mean ({len(mean)}) is not the size of cov ({n},{n})")
+
+    # Cholesky Decomposition
+
+    # Attempt standard Cholesky decomposition
+    try:
+        l = np.linalg.cholesky(cov).T  # NumPy returns upper triangular
+    except np.linalg.LinAlgError:  # If not PD check PSD and then use chol_psd()
+        if not is_psd(cov):
+            raise ValueError("Covariance matrix is not positive semi-definite.")
+        else:
+            l = np.zeros_like(cov)
+            chol_psd(l, cov)
+
+    # Generate random standard normals
+    np.random.seed(seed)
+    d = stats.norm.rvs(size=(n, N))
+
+    # Multiply generated standard normal variables by the Cholesky factor to get variables with desired covariance
+    out = np.dot(l, d)
+
+    # Add the mean
+    for i in range(n):
+        out[i, :] += mean[i]
+
+    return out.T
+
+
+# Simulate from PCA
+
+def simulate_pca(a, nsim, pctExp=1, mean=None, seed=1234):
+    """
+    Simulate a multivariate normal distribution using PCA based on a covariance matrix and an optional percentage of
+    variance explained (indirectly the number of eigenvalues/principal components to include).
+    :param a: The input covariance matrix
+    :param nsim: Specifies the number of samples to simulate
+    :param pctExp: (optional) The percentage of total variance that should be explained by the principal components. The
+    default is 100%
+    :param mean: (optional) The mean vector of the covariance matrix. If not provided the default mean is zero
+    :param seed: (optional) The seed for random number generation to ensure reproducibility
+    :return: out: The matrix of simulated samples
+    """
+    n = a.shape[0]
+
+    if mean is None:
+        _mean = np.zeros(n)
+    else:
+        _mean = np.array(mean)
+
+    # Eigenvalue decomposition
+    vals, vecs = np.linalg.eigh(a)
+    vals = np.real(vals)
+    vecs = np.real(vecs)
+    # Sort values and vectors in descending order
+    idx = vals.argsort()[::-1]
+    vals = vals[idx]
+    vecs = vecs[:, idx]
+
+    tv = np.sum(vals)
+
+    posv = np.where(vals >= 1e-8)[0]
+    if pctExp < 1:
+        pct = 0.0
+        for i in posv:
+            pct += vals[i] / tv
+            if pct >= pctExp:
+                posv = posv[:np.where(posv == i)[0][0] + 1]
+                break
+    vals = vals[posv]
+    vecs = vecs[:, posv]
+
+    # Construct B matrix
+    B = vecs @ np.diag(np.sqrt(vals))
+
+    # Generate random samples
+    np.random.seed(seed)
+    r = np.random.randn(vals.shape[0], nsim)
+    print(B.shape, r.shape)
+    out = (B @ r).T
+
+    # Add the mean
+    for i in range(n):
+        out[:, i] += _mean[i]
+
+    return out
+
+
+# Generate a correlation matrix and variance vector two ways
+
+# #1 Pearson Covariance and Correlation
+pearson_cov = daily_returns.cov().values
+pearson_std = np.sqrt(np.diag(pearson_cov))
+pearson_cor = daily_returns.corr().values
+
+# #2 Exponentially Weighted Covariance and Standard Deviation
+ewma_cov = ewCovar(daily_returns.values, 0.97)  # Implement ewCovar function
+ewma_std = np.sqrt(np.diag(ewma_cov))
+ewma_cor = np.diag(1.0 / ewma_std) @ ewma_cov @ np.diag(1.0 / ewma_std)
+
+print("EWMA Cov Shape:", ewma_cov.shape)
+print("Pearson Std Diag Shape:", np.diag(pearson_std).shape)
+print("EWMA Cor Shape:", ewma_cor.shape)
+print("Pearson Cor Shape:", pearson_cor.shape)
+print("EWMA Std Diag Shape:", np.diag(ewma_std).shape)
+
+
+# Combine to form 4 different covariance matrices
+matrix_lookup = {
+    "EWMA": ewma_cov,
+    "EWMA_COR_PEARSON_STD": np.diag(pearson_std) @ ewma_cor @ np.diag(pearson_std),
+    "PEARSON": pearson_cov,
+    "PEARSON_COR_EWMA_STD": np.diag(ewma_std) @ pearson_cor @ np.diag(ewma_std)
+}
+
+# Simulate draws and compute covariance
+matrix_type = ["EWMA", "EWMA_COR_PEARSON_STD", "PEARSON", "PEARSON_COR_EWMA_STD"]
+sim_type = ["Direct", "PCA: pctExp=1", "PCA: pctExp=0.75", "PCA: pctExp=0.5"]
+
+results = []
+
+for sim in sim_type:
+    for mat in matrix_type:
+        cov_matrix = matrix_lookup[mat]
+        elapse = 0.0
+        s = []
+
+        if sim == "Direct":  # Simulating directly
+            st = time.time()
+            for _ in range(20):
+                s = simulate_normal(25000, cov_matrix)
+            elapse = (time.time() - st) / 20
+        elif sim == "PCA: pctExp=1":  # Simulating from PCA with 100% variance explained by principal components
+            st = time.time()
+            for _ in range(20):
+                s = simulate_pca(cov_matrix, 25000, pctExp=1)
+            elapse = (time.time() - st) / 20
+        elif sim == "PCA: pctExp=0.75":  # Simulating from PCA with 75% of variance explained by principal components
+            st = time.time()
+            for _ in range(20):
+                s = simulate_pca(cov_matrix, 25000, pctExp=0.75)
+            elapse = (time.time() - st) / 20
+        else:  # PCA: pctExp=0.5  # Simulating from PCA with 50% of variance explained by principal components
+            st = time.time()
+            for _ in range(20):
+                s = simulate_pca(cov_matrix, 25000, pctExp=0.5)
+            elapse = (time.time() - st) / 20
+
+        simulated_covar = np.cov(s, rowvar=False)
+        l2_norm = np.sum((simulated_covar - cov_matrix) ** 2)
+        results.append([mat, sim, elapse, l2_norm])
+
+# Create DataFrame for results
+out_table = pd.DataFrame(results, columns=["Matrix", "Simulation", "Runtime", "Norm"])
+
+
+
+# Runtime Plot
+
+# Correct labels for the x-axis
+correct_labels = ['Direct', 'PCA: pctExp=1', 'PCA: pctExp=0.75', 'PCA: pctExp=0.5']
+
+# Sort 'Simulation' column to control the order of the x-axis categories
+out_table['Simulation'] = pd.Categorical(out_table['Simulation'], categories=correct_labels, ordered=True)
+
+# Sort the DataFrame based on 'Simulation' to ensure correct grouping
+out_table_sorted = out_table.sort_values('Simulation')
+
+# Runtime Plot
+plt.figure(figsize=(12, 6))
+runtime_plot = sns.barplot(
+    x='Simulation',
+    y='Runtime',
+    hue='Matrix',
+    data=out_table_sorted,
+    ci=None
+)
+
+# Get the unique values from the 'Simulation' column in the order they're plotted
+unique_simulations = out_table_sorted['Simulation'].unique()
+
+# Set the positions for the x-ticks at the center of each group
+# Use the unique values from 'Simulation' as the labels
+plt.xticks(ticks=np.arange(len(unique_simulations)), labels=unique_simulations, rotation=45)
+
+# Set the title and labels for the plot
+runtime_plot.set_title('Simulation Runtime Comparison')
+runtime_plot.set_xlabel('Simulation Type')
+runtime_plot.set_ylabel('Runtime (seconds)')
+
+plt.legend(title='Matrix Type')
+plt.tight_layout()
+plt.show()
+
+
+# Norm Plot
+
+# Correct labels for the x-axis
+correct_labels = ['Direct', 'PCA: pctExp=1', 'PCA: pctExp=0.75', 'PCA: pctExp=0.5']
+
+# Sort 'Simulation' column to control the order of the x-axis categories
+out_table['Simulation'] = pd.Categorical(out_table['Simulation'], categories=correct_labels, ordered=True)
+
+# Sort the DataFrame based on 'Simulation' to ensure correct grouping
+out_table_sorted = out_table.sort_values('Simulation')
+
+# Accuracy Plot
+plt.figure(figsize=(12, 6))
+accuracy_plot = sns.barplot(
+    x='Simulation',
+    y='Norm',
+    hue='Matrix',
+    data=out_table_sorted,
+    ci=None
+)
+
+# Set the positions for the x-ticks at the center of each group
+# Set the custom labels for these x-tick positions
+plt.xticks(ticks=np.arange(len(correct_labels)), labels=correct_labels, rotation=45)
+
+# Set the title and labels for the plot
+accuracy_plot.set_title('Simulation Accuracy Comparison')
+accuracy_plot.set_xlabel('Simulation Type')
+accuracy_plot.set_ylabel('Frobenius Norm')
+
+plt.legend(title='Matrix Type')
+plt.tight_layout()
+plt.show()
+
+
 
