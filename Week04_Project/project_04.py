@@ -230,6 +230,9 @@ def ewCovar(x, lambda_):
     return cov_matrix
 
 
+# Retrieve the most recent prices
+current_stock_prices = daily_prices.iloc[-1]
+
 def calculate_portfolio_var(portfolio, holdings_df, covariance_matrix, confidence_level):
     """
     Calculate the VaR for a given portfolio using exponentially weighted covariance matrix.
@@ -252,9 +255,13 @@ def calculate_portfolio_var(portfolio, holdings_df, covariance_matrix, confidenc
     # Extract the relevant rows and columns from the covariance matrix
     portfolio_covariance = covariance_matrix[np.ix_(stock_indices, stock_indices)]
 
+    # Adjust holdings to current market values (shares * current price)
+    market_values = [holding * current_stock_prices[stock] for holding, stock in
+                     zip(portfolio_holdings['Holding'], portfolio_holdings['Stock'])]
+
     # Calculate portfolio variance
     holdings = portfolio_holdings['Holding'].values
-    portfolio_variance = np.dot(holdings, np.dot(portfolio_covariance, holdings))
+    portfolio_variance = np.dot(market_values, np.dot(portfolio_covariance, market_values))
 
     # Calculate the portfolio standard deviation (sqrt of variance)
     portfolio_std_dev = np.sqrt(portfolio_variance)
@@ -286,9 +293,13 @@ def calculate_total_portfolio_var(holdings_df, covariance_matrix, confidence_lev
     # Extract the relevant rows and columns from the covariance matrix
     total_covariance = covariance_matrix[np.ix_(stock_indices, stock_indices)]
 
+    # Adjust total holdings to current market values
+    total_market_values = [holding * current_stock_prices[stock] for holding, stock in
+                           zip(total_holdings, total_holdings.index)]
+
     # Calculate total portfolio variance
     holdings = total_holdings.values
-    total_portfolio_variance = np.dot(holdings, np.dot(total_covariance, holdings))
+    total_portfolio_variance = np.dot(total_market_values, np.dot(total_covariance, total_market_values))
 
     # Calculate the total portfolio standard deviation (sqrt of variance)
     total_portfolio_std_dev = np.sqrt(total_portfolio_variance)
@@ -324,7 +335,7 @@ portfolio_vars = ({portfolio: calculate_portfolio_var(portfolio, portfolio_df, e
 total_var = calculate_total_portfolio_var(portfolio_df, ew_cov_matrix, confidence_level)
 
 # Display the calculated VaR for each portfolio and the total holdings
-print('Portfolios:', portfolio_vars)
+print('Portfolios VaR:', portfolio_vars)
 print("Total VaR:", total_var)
 
 
@@ -337,8 +348,9 @@ centered_returns_reshaped = centered_returns.melt(id_vars='Date', var_name='Stoc
 portfolio_with_centered_returns = pd.merge(portfolio_df, centered_returns_reshaped, on='Stock')
 
 # Calculate the daily value change for each stock in each portfolio
-portfolio_with_centered_returns['DailyValueChange'] = (portfolio_with_centered_returns['Holding'] *
-                                                       portfolio_with_centered_returns['Return'])
+portfolio_with_centered_returns['DailyValueChange'] = portfolio_with_centered_returns.apply(
+    lambda row: row['Holding'] * row['Return'] * current_stock_prices[row['Stock']], axis=1)
+
 # Aggregate daily portfolio values
 daily_portfolio_values_mean_centered = (portfolio_with_centered_returns.groupby(['Date', 'Portfolio'])
                                         ['DailyValueChange'].sum().reset_index())
