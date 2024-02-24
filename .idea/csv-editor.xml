@@ -45,6 +45,20 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/Week04_Project/DailyPrices.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/Week04_Project/DailyReturn.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
       </map>
     </option>
   </component>
