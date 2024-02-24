@@ -339,7 +339,7 @@ print('Portfolios VaR:', portfolio_vars)
 print("Total VaR:", total_var)
 
 
-# Now with Historical VaR
+# Now to calculate VaR with Historical Simulation
 
 # First, reshape the daily returns dataframe to merge it with the portfolio holdings
 centered_returns_reshaped = centered_returns.melt(id_vars='Date', var_name='Stock', value_name='Return')
