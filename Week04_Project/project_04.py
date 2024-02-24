@@ -316,17 +316,16 @@ ew_cov_matrix = ewCovar(centered_returns_data, lambda_factor)
 # Calculate VaR for each portfolio
 confidence_level = 0.95  # 95% confidence level
 portfolios = portfolio_df['Portfolio'].unique()
-portfolio_vars = {portfolio: calculate_portfolio_var(portfolio, portfolio_df, ew_cov_matrix, confidence_level) for portfolio in portfolios}
+portfolio_vars = ({portfolio: calculate_portfolio_var(portfolio, portfolio_df, ew_cov_matrix, confidence_level)
+                   for portfolio in portfolios})
 
 
 # Calculate VaR for the total holdings
 total_var = calculate_total_portfolio_var(portfolio_df, ew_cov_matrix, confidence_level)
 
 # Display the calculated VaR for each portfolio and the total holdings
-print(portfolio_vars)
+print('Portfolios:', portfolio_vars)
 print("Total VaR:", total_var)
-
-
 
 
 # Now with Historical VaR
