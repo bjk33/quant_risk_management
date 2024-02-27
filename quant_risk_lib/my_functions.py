@@ -38,3 +38,53 @@ def mle_fit(x, y, ols_betas, sigma_ols):
                  bounds=[(None, None)] * (len(initial_params) - 1) + [(0.0001, None)]))
 
     return result.x
+
+
+def mle_fit_t(x, y, initial_betas, initial_sigma, initial_df=10):
+    """
+    Fitting data using MLE given Student's t-distribution assumption
+    :param x: independent variable data column
+    :param y: dependent variable data column
+    :param initial_betas: model parameters of fitted OLS model
+    :param initial_sigma: standard deviation of OLS model errors
+    :param initial_df: degrees of freedom (default is 10)
+    :return: fitted data using MLE given t-distribution assumption
+    """
+    # Define the negative log-likelihood function for T-distribution
+    def negative_log_likelihood_t(params):
+        betas_t = params[:x.shape[1]]
+        sigma_t = params[-2]
+        df = params[-1]
+
+        y_pred = x @ betas_t
+        rv = t(df)
+        log_likelihood = rv.logpdf((y - y_pred) / sigma_t) - np.log(sigma_t)
+
+        return -np.sum(log_likelihood)  # negate the log likelihood to get the negative log likelihood
+
+    initial_params_t = np.append(initial_betas, [initial_sigma, initial_df])
+
+    # Minimizing the negative log-likelihood for T-distribution
+    result_t = minimize(negative_log_likelihood_t, initial_params_t, args=(x, y), method='L-BFGS-B',
+                        bounds=[(None, None)] * (len(initial_params_t) - 2) + [(0.0001, None), (2, None)])
+    return result_t.x
+
+
+def calculate_log_likelihood_normal(sigma, residuals):
+    """
+    Compute the residual log likelihood for a normal distribution for using in goodness of fit comparisons (AIC, BIC).
+    :param sigma:
+    :param residuals:
+    :return:
+    """
+    n = len(residuals)
+    log_likelihood_normal = (-n / 2 * np.log(2 * np.pi) - n / 2 * np.log(sigma ** 2) - 1 / (2 * sigma ** 2) *
+                             np.sum(residuals ** 2))
+    return log_likelihood_normal
+
+
+def calculate_log_likelihood_t(df, sigma, residuals):
+    rv = t(df)
+    log_likelihood_t = np.sum(rv.logpdf(residuals / sigma) - np.log(sigma))
+    return log_likelihood_t
+
