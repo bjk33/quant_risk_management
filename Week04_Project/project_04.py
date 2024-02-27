@@ -198,6 +198,7 @@ new_prices = (1 + sampled_returns) * current_price
 # Calculate VaR
 var = np.percentile(new_prices, (alpha) * 100)
 var_hist = current_price - var
+print(var_hist/current_price)
 print("Historical VaR with KDE at 95% confidence level:", var_hist)
 
 # Problem 3 #
