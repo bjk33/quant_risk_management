@@ -72,10 +72,11 @@ def mle_fit_t(x, y, initial_betas, initial_sigma, initial_df=10):
 
 def calculate_log_likelihood_normal(sigma, residuals):
     """
-    Compute the residual log likelihood for a normal distribution for using in goodness of fit comparisons (AIC, BIC).
-    :param sigma:
-    :param residuals:
-    :return:
+    Compute the residual log likelihood for MLE given normal distribution assumption
+     for using in goodness of fit comparisons (AIC, BIC).
+    :param sigma: MLE of standard deviation of the data under model assumption
+    :param residuals: difference between truth (y) and prediction (x * beta_1)
+    :return: log_likelihood_normal: the residual log likelihood
     """
     n = len(residuals)
     log_likelihood_normal = (-n / 2 * np.log(2 * np.pi) - n / 2 * np.log(sigma ** 2) - 1 / (2 * sigma ** 2) *
@@ -84,6 +85,13 @@ def calculate_log_likelihood_normal(sigma, residuals):
 
 
 def calculate_log_likelihood_t(df, sigma, residuals):
+    """
+    Compute the residual log likelihood for MLE given t-distribution assumption
+    :param df: degrees of freedom of fit model
+    :param sigma: MLE of standard deviation of the data under model assumption
+    :param residuals: difference between truth (y) and prediction (x * beta_1)
+    :return: log_likelihood_t: the residual log likelihood
+    """
     rv = t(df)
     log_likelihood_t = np.sum(rv.logpdf(residuals / sigma) - np.log(sigma))
     return log_likelihood_t
