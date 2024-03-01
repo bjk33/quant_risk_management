@@ -644,7 +644,7 @@ def calculate_var_mle_t_dist(returns, alpha):
     return -var
 
 
-def calculate_var_ar1(returns, confidence_level):
+def calculate_var_ar1(returns, alpha):
     """
     Calculate VaR using a fitted AR(1) model with ARIMA from statsmodels.
 
@@ -667,6 +667,6 @@ def calculate_var_ar1(returns, confidence_level):
     residuals_std = ar_result.resid.std()
 
     # Calculate VaR assuming normality of residuals
-    z_score = norm.ppf(1 - confidence_level)
+    z_score = norm.ppf(alpha)
     var = -(forecast + z_score * residuals_std)
     return var

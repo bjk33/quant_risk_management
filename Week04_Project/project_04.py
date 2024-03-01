@@ -205,6 +205,9 @@ print("Historical VaR with KDE at 95% confidence level:", var_hist)
 
 # Portfolio VaR
 
+# Load portfolio
+portfolio_path = '/Users/brandonkaplan/Desktop/FINTECH545/Week04_Project/portfolio.csv'
+portfolio_df = pd.read_csv(portfolio_path)
 
 def ewCovar(x, lambda_):
     """Compute exponentially weighted covariance matrix of a dataframe.
@@ -231,6 +234,80 @@ def ewCovar(x, lambda_):
     return cov_matrix
 
 
+# Mean-centering each stock's returns in the daily_returns_df
+for asset in arithmetic_returns.columns[1:]:  # Skipping the 'Date' column
+    mean_centered_returns = mean_center_series(arithmetic_returns, asset)
+
+# Calculate EW Covariance Matrix
+lambda_factor = 0.94
+mean_centered_returns = mean_centered_returns.iloc[:, 1:]  # Exclude 'Date' column
+ew_cov_matrix = ewCovar(mean_centered_returns, lambda_factor)
+
+
+def calculate_portfolio_values(prices_df, portfolio_df):
+    """
+    Calculate the total value of each portfolio.
+
+    Parameters:
+    :param: prices_df (Pandas DataFrame): Data frame of stock prices
+    :param: portfolio_df (Pandas DataFrame): Data frame containing different portfolios and their holdings of the stocks
+
+    Returns:
+    :return: pd.Series: Total value of each portfolio.
+    """
+
+    # Get the latest prices for each stock
+    latest_prices = prices_df.iloc[-1, 1:]  # Skipping the 'Date' column
+    latest_prices = latest_prices.astype(float)  # Convert prices to float
+
+    # Pivot the portfolio DataFrame to align with the stock symbols
+    restructured_portfolio = (portfolio_df.pivot_table(index='Stock', columns='Portfolio', values='Holding',
+                                                       fill_value=0))
+
+    # Calculate the current value of each stock in each portfolio
+    portfolio_values = restructured_portfolio.multiply(latest_prices, axis=0)
+
+    # Calculate the total value of each portfolio
+    portfolio_totals = portfolio_values.sum(axis=0)
+
+    return portfolio_totals
+
+
+portfolio_totals = calculate_portfolio_values(daily_prices, portfolio_df)
+
+# Print the portfolio values
+print("Current Portfolio Value:")
+for portfolio, value in portfolio_totals.items():
+    print(f"Portfolio {portfolio}: ${value:,.2f}")
+
+
+
+
+
+# Print the VaR for each portfolio
+for portfolio, var in portfolio_vars.items():
+    print(f"Portfolio {portfolio} VaR: ${var:,.2f}")
+
+
+
+
+
+
+
+
+
+# Print the VaR for each portfolio
+for portfolio, var in portfolio_vars.items():
+    print(f"Portfolio {portfolio} VaR: ${var:,.2f}")
+
+
+
+
+
+
+
+
+
 # Retrieve the most recent prices
 current_stock_prices = daily_prices.iloc[-1]
 
@@ -239,13 +316,13 @@ def calculate_portfolio_var(portfolio, holdings_df, covariance_matrix, confidenc
     Calculate the VaR for a given portfolio using exponentially weighted covariance matrix.
 
     Parameters:
-    portfolio (str): Portfolio identifier.
-    holdings_df (DataFrame): DataFrame with portfolio holdings.
-    covariance_matrix (ndarray): Exponentially weighted covariance matrix of returns.
-    confidence_level (float): Confidence level for VaR (e.g., 0.95 for 95%).
+    :param: portfolio (str): Portfolio identifier.
+    :param: holdings_df (DataFrame): DataFrame with portfolio holdings.
+    :param: covariance_matrix (ndarray): Exponentially weighted covariance matrix of returns.
+    :param: confidence_level (float): Confidence level for VaR (e.g., 0.95 for 95%).
 
     Returns:
-    float: The calculated VaR for the portfolio.
+    :return: -var: float: The calculated VaR for the portfolio.
     """
     # Filter holdings for the specific portfolio
     portfolio_holdings = holdings_df[holdings_df['Portfolio'] == portfolio]
@@ -297,6 +374,12 @@ def calculate_total_portfolio_var(holdings_df, covariance_matrix, confidence_lev
     # Adjust total holdings to current market values
     total_market_values = [holding * current_stock_prices[stock] for holding, stock in
                            zip(total_holdings, total_holdings.index)]
+    total_value = np.sum(total_market_values)
+    weights = total_market_values / total_value
+
+    # Calculate total portfolio variance
+    holdings = total_holdings.values
+    total_portfolio_variance = np.dot(weights, np.dot(total_covariance, weights))
 
     # Calculate total portfolio variance
     holdings = total_holdings.values
@@ -311,9 +394,7 @@ def calculate_total_portfolio_var(holdings_df, covariance_matrix, confidence_lev
     return -var  # VaR is a negative number representing loss
 
 
-# Load portfolio
-portfolio_path = '/Users/brandonkaplan/Desktop/FINTECH545/Week04_Project/portfolio.csv'
-portfolio_df = pd.read_csv(portfolio_path)
+
 
 # Mean-centering each stock's returns in the daily_returns_df
 for asset in arithmetic_returns.columns[1:]:  # Skipping the 'Date' column
