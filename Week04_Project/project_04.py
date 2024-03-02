@@ -242,7 +242,8 @@ for asset in arithmetic_returns.columns[1:]:  # Skipping the 'Date' column
 lambda_factor = 0.94
 mean_centered_returns = mean_centered_returns.iloc[:, 1:]  # Exclude 'Date' column
 ew_cov_matrix = ewCovar(mean_centered_returns, lambda_factor)
-ew_cov_matrix = pd.DataFrame(ew_cov_matrix)
+# ew_cov_matrix = pd.DataFrame(ew_cov_matrix)
+
 
 def calculate_portfolio_values(prices_df, portfolio_df):
     """
@@ -309,6 +310,7 @@ def calculate_portfolio_weights(prices_df, portfolio_df, portfolio_totals):
     # Calculate weights
     weights = dollar_values.divide(portfolio_totals)
     print(weights.shape)
+    print(weights['A'].sum())
     return weights
 
 # Calculate the weights for each portfolio
@@ -339,7 +341,7 @@ def calculate_var(portfolio_weights, returns_df, lambda_factor, portfolio_totals
 
         # Calculate the exponentially weighted covariance matrix for the portfolio
         portfolio_ew_cov_matrix = ewCovar(filtered_returns, lambda_factor)
-        #weights = portfolio_weights[portfolio].values
+        #weights = portfolio_weights[portfolio].values # commented this out for filtered weights
         portfolio_variance = np.dot(filtered_weights, np.dot(portfolio_ew_cov_matrix, filtered_weights))
         portfolio_std_dev = np.sqrt(portfolio_variance)
         portfolio_value = portfolio_totals[portfolio]
@@ -357,14 +359,53 @@ print(var_results)
 
 
 
+# implementation of profressors delta normal
+def delta_normal_var(portfolio_df, prices_df, returns_df, lambda_factor, z_score):
+    """
+    Calculate the Delta Normal VaR for each portfolio.
+
+    :param portfolio_df: DataFrame with portfolio holdings (quantity of shares)
+    :param prices_df: DataFrame with stock prices
+    :param returns_df: DataFrame with stock returns
+    :param lambda_factor: Lambda factor for exponentially weighted covariance
+    :param z_score: Z-Score for the desired confidence level
+    :return: Dictionary with VaR for each portfolio
+    """
+    var_values = {}
+    portfolio_totals = calculate_portfolio_values(prices_df, portfolio_df)
+
+    for portfolio in portfolio_df['Portfolio'].unique():
+        holdings = portfolio_df[portfolio_df['Portfolio'] == portfolio]
+        relevant_stocks = holdings['Stock'].tolist()
+        current_prices = prices_df[relevant_stocks].iloc[-1]
+        filtered_returns = returns_df[relevant_stocks]
+
+        # Calculate portfolio value
+        portfolio_value = sum(holdings[holdings['Stock'] == stock]['Holding'].iloc[0] * current_prices[stock] for stock in relevant_stocks)
+
+        # Calculate delta (portfolio weights)
+        delta = np.array([holdings[holdings['Stock'] == stock]['Holding'].iloc[0] * current_prices[stock] / portfolio_value for stock in relevant_stocks])
+
+        # Calculate covariance matrix
+        cov_matrix = ewCovar(filtered_returns, lambda_factor)
+
+        # Portfolio standard deviation
+        portfolio_std_dev = np.sqrt(np.dot(delta.T, np.dot(cov_matrix, delta)))
+
+        # Calculate VaR
+        var = -portfolio_value * norm.ppf(z_score) * portfolio_std_dev
+        var_values[portfolio] = var
+
+    return var_values
+
+# Usage
+z_score = 0.05  # For a 95% confidence level
+lambda_factor = 0.94
 
 
-# Print the VaR for each portfolio
-for portfolio, var in portfolio_vars.items():
-    print(f"Portfolio {portfolio} VaR: ${var:,.2f}")
-
-
-
+# Calculate VaR for each portfolio
+var_results = delta_normal_var(portfolio_df, daily_prices, mean_centered_returns, lambda_factor, z_score)
+print(var_results)
 
 
 
