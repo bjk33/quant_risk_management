@@ -242,7 +242,7 @@ for asset in arithmetic_returns.columns[1:]:  # Skipping the 'Date' column
 lambda_factor = 0.94
 mean_centered_returns = mean_centered_returns.iloc[:, 1:]  # Exclude 'Date' column
 ew_cov_matrix = ewCovar(mean_centered_returns, lambda_factor)
-
+ew_cov_matrix = pd.DataFrame(ew_cov_matrix)
 
 def calculate_portfolio_values(prices_df, portfolio_df):
     """
@@ -281,6 +281,76 @@ for portfolio, value in portfolio_totals.items():
     print(f"Portfolio {portfolio}: ${value:,.2f}")
 
 
+def calculate_portfolio_weights(prices_df, portfolio_df, portfolio_totals):
+    """
+    Calculate the weights of each stock in each portfolio.
+
+    :param prices_df: DataFrame with stock prices
+    :param portfolio_df: DataFrame with portfolio holdings (quantity of shares)
+    :param portfolio_totals: Series with total value of each portfolio
+    :return: DataFrame with weights of each stock in each portfolio
+    """
+    # Get the latest prices for each stock
+    latest_prices = prices_df.iloc[-1, 1:]  # Assuming the last row contains the latest prices
+
+    # Pivot the portfolio DataFrame to align with the stock symbols
+    restructured_portfolio = portfolio_df.pivot_table(index='Stock', columns='Portfolio', values='Holding',
+                                                      fill_value=0)
+
+    # Calculate the dollar value of each holding
+    dollar_values = restructured_portfolio.multiply(latest_prices, axis=0)
+
+    # Identify the row(s) with NaN values
+    nan_rows = dollar_values[dollar_values.isna().all(axis=1)]
+
+    # If there's exactly one row with NaN values, and it's the extra row, remove it
+    if len(nan_rows) == 1:
+        dollar_values = dollar_values.dropna()
+    # Calculate weights
+    weights = dollar_values.divide(portfolio_totals)
+    print(weights.shape)
+    return weights
+
+# Calculate the weights for each portfolio
+portfolio_weights = calculate_portfolio_weights(daily_prices, portfolio_df, portfolio_totals)
+
+# Placeholder to proceed with the VaR calculation
+print(portfolio_weights) # This will display the calculated weights (to be used in further calculations)
+
+
+def calculate_var(portfolio_weights, cov_matrix, portfolio_totals, z_score=1.65):
+    """
+    Calculate the Delta Normal VaR for each portfolio using an exponentially weighted covariance matrix and a smoothing
+    factor of lambda_=0.94.
+
+    :param portfolio_weights: DataFrame with weights of each stock in each portfolio
+    :param cov_matrix: Exponentially weighted covariance matrix
+    :param portfolio_totals: Series with total value of each portfolio
+    :param z_score: Z-Score for the desired confidence level (default is 1.65 for 95% confidence)
+    :return: Dictionary with VaR for each portfolio and total VaR
+    """
+    var_values = {}
+    total_var = 0
+
+    for portfolio in portfolio_weights.columns:
+        weights = portfolio_weights[portfolio].values
+        portfolio_variance = np.dot(weights, np.dot(cov_matrix, weights))
+        portfolio_std_dev = np.sqrt(portfolio_variance)
+        portfolio_value = portfolio_totals[portfolio]
+        print(portfolio_value, portfolio)
+        portfolio_var = portfolio_value * z_score * portfolio_std_dev
+
+        var_values[portfolio] = portfolio_var
+        total_var += portfolio_var
+
+    var_values["Total"] = total_var
+    return var_values
+
+# Calculate VaR for each portfolio and total VaR
+var_results = calculate_var(portfolio_weights, ew_cov_matrix, portfolio_totals)
+print(var_results)
+
+
 
 
 
@@ -292,13 +362,6 @@ for portfolio, var in portfolio_vars.items():
 
 
 
-
-
-
-
-# Print the VaR for each portfolio
-for portfolio, var in portfolio_vars.items():
-    print(f"Portfolio {portfolio} VaR: ${var:,.2f}")
 
 
 
@@ -311,7 +374,7 @@ for portfolio, var in portfolio_vars.items():
 # Retrieve the most recent prices
 current_stock_prices = daily_prices.iloc[-1]
 
-def calculate_portfolio_var(portfolio, holdings_df, covariance_matrix, confidence_level):
+def calculate_portfolio_var(portfolio, holdings_df, mean_centered_returns_df, covariance_matrix, confidence_level):
     """
     Calculate the VaR for a given portfolio using exponentially weighted covariance matrix.
 
@@ -328,7 +391,7 @@ def calculate_portfolio_var(portfolio, holdings_df, covariance_matrix, confidenc
     portfolio_holdings = holdings_df[holdings_df['Portfolio'] == portfolio]
 
     # Map each stock to its index in the covariance matrix
-    stock_indices = [centered_returns_data.columns.get_loc(stock) for stock in portfolio_holdings['Stock']]
+    stock_indices = [mean_centered_returns_df.columns.get_loc(stock) for stock in portfolio_holdings['Stock']]
 
     # Extract the relevant rows and columns from the covariance matrix
     portfolio_covariance = covariance_matrix[np.ix_(stock_indices, stock_indices)]
@@ -336,18 +399,30 @@ def calculate_portfolio_var(portfolio, holdings_df, covariance_matrix, confidenc
     # Adjust holdings to current market values (shares * current price)
     market_values = [holding * current_stock_prices[stock] for holding, stock in
                      zip(portfolio_holdings['Holding'], portfolio_holdings['Stock'])]
+    total_value = np.sum(market_values)
+    weights = market_values / total_value
 
     # Calculate portfolio variance
     holdings = portfolio_holdings['Holding'].values
-    portfolio_variance = np.dot(market_values, np.dot(portfolio_covariance, market_values))
+    portfolio_variance = np.dot(weights, np.dot(portfolio_covariance, weights))
 
     # Calculate the portfolio standard deviation (sqrt of variance)
     portfolio_std_dev = np.sqrt(portfolio_variance)
 
     # Calculate VaR as z-score times standard deviation
     z_score = norm.ppf(1 - confidence_level)
-    var = z_score * portfolio_std_dev
+    var = z_score * portfolio_std_dev * total_value
     return -var  # VaR is a negative number representing loss
+
+# Calculate VaR for each portfolio and the total holdings
+# Calculate VaR for each portfolio
+confidence_level = 0.95  # 95% confidence level
+portfolios = portfolio_df['Portfolio'].unique()
+portfolio_vars = ({portfolio: calculate_portfolio_var(portfolio, portfolio_df, mean_centered_returns, ew_cov_matrix, confidence_level)
+                   for portfolio in portfolios})
+
+print(portfolio_vars)
+
 
 
 def calculate_total_portfolio_var(holdings_df, covariance_matrix, confidence_level):
