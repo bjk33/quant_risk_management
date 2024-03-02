@@ -446,7 +446,7 @@ def calculate_portfolio_var(portfolio, holdings_df, mean_centered_returns_df, co
     market_values = [holding * current_stock_prices[stock] for holding, stock in
                      zip(portfolio_holdings['Holding'], portfolio_holdings['Stock'])]
     total_value = np.sum(market_values)
-    weights = market_values / total_value
+    weights = market_values / total_value # cant divide list this doesnt work
 
     # Calculate portfolio variance
     holdings = portfolio_holdings['Holding'].values
