@@ -315,13 +315,13 @@ def calculate_portfolio_weights(prices_df, portfolio_df, portfolio_totals):
 portfolio_weights = calculate_portfolio_weights(daily_prices, portfolio_df, portfolio_totals)
 
 # Placeholder to proceed with the VaR calculation
-print(portfolio_weights) # This will display the calculated weights (to be used in further calculations)
+print(portfolio_weights)
 
 
-def calculate_var(portfolio_weights, cov_matrix, portfolio_totals, z_score=1.65):
+def calculate_var(portfolio_weights, returns_df, lambda_factor, portfolio_totals, z_score):
     """
     Calculate the Delta Normal VaR for each portfolio using an exponentially weighted covariance matrix and a smoothing
-    factor of lambda_=0.94.
+    factor of lambda=0.94.
 
     :param portfolio_weights: DataFrame with weights of each stock in each portfolio
     :param cov_matrix: Exponentially weighted covariance matrix
@@ -330,24 +330,29 @@ def calculate_var(portfolio_weights, cov_matrix, portfolio_totals, z_score=1.65)
     :return: Dictionary with VaR for each portfolio and total VaR
     """
     var_values = {}
-    total_var = 0
 
     for portfolio in portfolio_weights.columns:
-        weights = portfolio_weights[portfolio].values
-        portfolio_variance = np.dot(weights, np.dot(cov_matrix, weights))
+        # Filter the returns for the stocks in the portfolio
+        portfolio_stocks = portfolio_weights.index[portfolio_weights[portfolio] > 0]
+        filtered_returns = returns_df[portfolio_stocks]
+        filtered_weights = portfolio_weights.loc[portfolio_stocks, portfolio] # I am now trying to calc portfolio covar
+
+        # Calculate the exponentially weighted covariance matrix for the portfolio
+        portfolio_ew_cov_matrix = ewCovar(filtered_returns, lambda_factor)
+        #weights = portfolio_weights[portfolio].values
+        portfolio_variance = np.dot(filtered_weights, np.dot(portfolio_ew_cov_matrix, filtered_weights))
         portfolio_std_dev = np.sqrt(portfolio_variance)
         portfolio_value = portfolio_totals[portfolio]
         print(portfolio_value, portfolio)
         portfolio_var = portfolio_value * z_score * portfolio_std_dev
 
         var_values[portfolio] = portfolio_var
-        total_var += portfolio_var
 
-    var_values["Total"] = total_var
     return var_values
 
+
 # Calculate VaR for each portfolio and total VaR
-var_results = calculate_var(portfolio_weights, ew_cov_matrix, portfolio_totals)
+var_results = calculate_var(portfolio_weights, mean_centered_returns,0.94, portfolio_totals, 1.65)
 print(var_results)
 
 
@@ -368,7 +373,7 @@ for portfolio, var in portfolio_vars.items():
 
 
 
-
+# Old function which I rewrote above
 
 
 # Retrieve the most recent prices
@@ -471,38 +476,20 @@ def calculate_total_portfolio_var(holdings_df, covariance_matrix, confidence_lev
 
 
 
-# Mean-centering each stock's returns in the daily_returns_df
-for asset in arithmetic_returns.columns[1:]:  # Skipping the 'Date' column
-    centered_returns = mean_center_series(arithmetic_returns, asset)
-
-# Compute EW Cov matrix
-lambda_factor = 0.94
-centered_returns_data = centered_returns.iloc[:, 1:]  # Exclude 'Date' column
-ew_cov_matrix = ewCovar(centered_returns_data, lambda_factor)
-
-# Calculate VaR for each portfolio and the total holdings
-# Calculate VaR for each portfolio
-confidence_level = 0.95  # 95% confidence level
-portfolios = portfolio_df['Portfolio'].unique()
-portfolio_vars = ({portfolio: calculate_portfolio_var(portfolio, portfolio_df, ew_cov_matrix, confidence_level)
-                   for portfolio in portfolios})
 
 
-# Calculate VaR for the total holdings
-total_var = calculate_total_portfolio_var(portfolio_df, ew_cov_matrix, confidence_level)
 
-# Display the calculated VaR for each portfolio and the total holdings
-print('Portfolios VaR:', portfolio_vars)
-print("Total VaR:", total_var)
+
+
 
 
 # Now to calculate VaR with Historical Simulation
 
 # First, reshape the daily returns dataframe to merge it with the portfolio holdings
-centered_returns_reshaped = centered_returns.melt(id_vars='Date', var_name='Stock', value_name='Return')
+mean_centered_returns_reshaped = mean_centered_returns.melt(id_vars='Date', var_name='Stock', value_name='Return')
 
 # Merge the portfolio holdings with the reshaped daily returns
-portfolio_with_centered_returns = pd.merge(portfolio_df, centered_returns_reshaped, on='Stock')
+portfolio_with_centered_returns = pd.merge(portfolio_df, mean_centered_returns_reshaped, on='Stock')
 
 # Calculate the daily value change for each stock in each portfolio
 portfolio_with_centered_returns['DailyValueChange'] = portfolio_with_centered_returns.apply(
