@@ -4,6 +4,7 @@ from scipy.stats import norm
 from scipy.stats import t
 from scipy.stats import gaussian_kde
 import statsmodels.api as sm
+from concurrent.futures import ThreadPoolExecutor
 
 # Problem 1 #
 
@@ -313,6 +314,7 @@ def calculate_portfolio_weights(prices_df, portfolio_df, portfolio_totals):
     print(weights['A'].sum())
     return weights
 
+
 # Calculate the weights for each portfolio
 portfolio_weights = calculate_portfolio_weights(daily_prices, portfolio_df, portfolio_totals)
 
@@ -358,8 +360,7 @@ var_results = calculate_var(portfolio_weights, mean_centered_returns,0.94, portf
 print(var_results)
 
 
-
-# implementation of profressors delta normal
+# implementation of professor's delta normal
 def delta_normal_var(portfolio_df, prices_df, returns_df, lambda_factor, z_score):
     """
     Calculate the Delta Normal VaR for each portfolio.
@@ -372,7 +373,8 @@ def delta_normal_var(portfolio_df, prices_df, returns_df, lambda_factor, z_score
     :return: Dictionary with VaR for each portfolio
     """
     var_values = {}
-    portfolio_totals = calculate_portfolio_values(prices_df, portfolio_df)
+    total_holdings = {}
+    total_portfolio_value = 0
 
     for portfolio in portfolio_df['Portfolio'].unique():
         holdings = portfolio_df[portfolio_df['Portfolio'] == portfolio]
@@ -381,10 +383,20 @@ def delta_normal_var(portfolio_df, prices_df, returns_df, lambda_factor, z_score
         filtered_returns = returns_df[relevant_stocks]
 
         # Calculate portfolio value
-        portfolio_value = sum(holdings[holdings['Stock'] == stock]['Holding'].iloc[0] * current_prices[stock] for stock in relevant_stocks)
+        portfolio_value = (sum(holdings[holdings['Stock'] == stock]['Holding'].iloc[0] * current_prices[stock] for
+                               stock in relevant_stocks))
+        # And total value
+        total_portfolio_value += portfolio_value
+
+        # Aggregate holdings for total portfolio calculation
+        for stock in relevant_stocks:
+            if stock not in total_holdings:
+                total_holdings[stock] = 0
+            total_holdings[stock] += holdings[holdings['Stock'] == stock]['Holding'].iloc[0] * current_prices[stock]
 
         # Calculate delta (portfolio weights)
-        delta = np.array([holdings[holdings['Stock'] == stock]['Holding'].iloc[0] * current_prices[stock] / portfolio_value for stock in relevant_stocks])
+        delta = (np.array([holdings[holdings['Stock'] == stock]['Holding'].iloc[0] * current_prices[stock] /
+                           portfolio_value for stock in relevant_stocks]))
 
         # Calculate covariance matrix
         cov_matrix = ewCovar(filtered_returns, lambda_factor)
@@ -396,6 +408,14 @@ def delta_normal_var(portfolio_df, prices_df, returns_df, lambda_factor, z_score
         var = -portfolio_value * norm.ppf(z_score) * portfolio_std_dev
         var_values[portfolio] = var
 
+    # Total portfolio VaR calculation
+    relevant_stocks = list(total_holdings.keys())
+    total_delta = np.array([total_holdings[stock] / total_portfolio_value for stock in relevant_stocks])
+    total_cov_matrix = ewCovar(returns_df[relevant_stocks], lambda_factor)
+    total_portfolio_std_dev = np.sqrt(np.dot(total_delta.T, np.dot(total_cov_matrix, total_delta)))
+    total_var = -total_portfolio_value * norm.ppf(z_score) * total_portfolio_std_dev
+    var_values['Total'] = total_var
+
     return var_values
 
 # Usage
@@ -406,122 +426,6 @@ lambda_factor = 0.94
 # Calculate VaR for each portfolio
 var_results = delta_normal_var(portfolio_df, daily_prices, mean_centered_returns, lambda_factor, z_score)
 print(var_results)
-
-
-
-
-
-
-
-
-# Old function which I rewrote above
-
-
-# Retrieve the most recent prices
-current_stock_prices = daily_prices.iloc[-1]
-
-def calculate_portfolio_var(portfolio, holdings_df, mean_centered_returns_df, covariance_matrix, confidence_level):
-    """
-    Calculate the VaR for a given portfolio using exponentially weighted covariance matrix.
-
-    Parameters:
-    :param: portfolio (str): Portfolio identifier.
-    :param: holdings_df (DataFrame): DataFrame with portfolio holdings.
-    :param: covariance_matrix (ndarray): Exponentially weighted covariance matrix of returns.
-    :param: confidence_level (float): Confidence level for VaR (e.g., 0.95 for 95%).
-
-    Returns:
-    :return: -var: float: The calculated VaR for the portfolio.
-    """
-    # Filter holdings for the specific portfolio
-    portfolio_holdings = holdings_df[holdings_df['Portfolio'] == portfolio]
-
-    # Map each stock to its index in the covariance matrix
-    stock_indices = [mean_centered_returns_df.columns.get_loc(stock) for stock in portfolio_holdings['Stock']]
-
-    # Extract the relevant rows and columns from the covariance matrix
-    portfolio_covariance = covariance_matrix[np.ix_(stock_indices, stock_indices)]
-
-    # Adjust holdings to current market values (shares * current price)
-    market_values = [holding * current_stock_prices[stock] for holding, stock in
-                     zip(portfolio_holdings['Holding'], portfolio_holdings['Stock'])]
-    total_value = np.sum(market_values)
-    weights = market_values / total_value # cant divide list this doesnt work
-
-    # Calculate portfolio variance
-    holdings = portfolio_holdings['Holding'].values
-    portfolio_variance = np.dot(weights, np.dot(portfolio_covariance, weights))
-
-    # Calculate the portfolio standard deviation (sqrt of variance)
-    portfolio_std_dev = np.sqrt(portfolio_variance)
-
-    # Calculate VaR as z-score times standard deviation
-    z_score = norm.ppf(1 - confidence_level)
-    var = z_score * portfolio_std_dev * total_value
-    return -var  # VaR is a negative number representing loss
-
-# Calculate VaR for each portfolio and the total holdings
-# Calculate VaR for each portfolio
-confidence_level = 0.95  # 95% confidence level
-portfolios = portfolio_df['Portfolio'].unique()
-portfolio_vars = ({portfolio: calculate_portfolio_var(portfolio, portfolio_df, mean_centered_returns, ew_cov_matrix, confidence_level)
-                   for portfolio in portfolios})
-
-print(portfolio_vars)
-
-
-
-def calculate_total_portfolio_var(holdings_df, covariance_matrix, confidence_level):
-    """
-    Calculate the VaR for the total holdings across all portfolios.
-
-    Parameters:
-    holdings_df (DataFrame): DataFrame with portfolio holdings.
-    covariance_matrix (ndarray): Exponentially weighted covariance matrix of returns.
-    confidence_level (float): Confidence level for VaR (e.g., 0.95 for 95%).
-
-    Returns:
-    float: The calculated VaR for the total holdings.
-    """
-    # Aggregate holdings across all portfolios
-    total_holdings = holdings_df.groupby('Stock')['Holding'].sum()
-
-    # Map each stock to its index in the covariance matrix
-    stock_indices = [centered_returns_data.columns.get_loc(stock) for stock in total_holdings.index]
-
-    # Extract the relevant rows and columns from the covariance matrix
-    total_covariance = covariance_matrix[np.ix_(stock_indices, stock_indices)]
-
-    # Adjust total holdings to current market values
-    total_market_values = [holding * current_stock_prices[stock] for holding, stock in
-                           zip(total_holdings, total_holdings.index)]
-    total_value = np.sum(total_market_values)
-    weights = total_market_values / total_value
-
-    # Calculate total portfolio variance
-    holdings = total_holdings.values
-    total_portfolio_variance = np.dot(weights, np.dot(total_covariance, weights))
-
-    # Calculate total portfolio variance
-    holdings = total_holdings.values
-    total_portfolio_variance = np.dot(total_market_values, np.dot(total_covariance, total_market_values))
-
-    # Calculate the total portfolio standard deviation (sqrt of variance)
-    total_portfolio_std_dev = np.sqrt(total_portfolio_variance)
-
-    # Calculate VaR as z-score times standard deviation
-    z_score = norm.ppf(1 - confidence_level)
-    var = z_score * total_portfolio_std_dev
-    return -var  # VaR is a negative number representing loss
-
-
-
-
-
-
-
-
-
 
 
 # Now to calculate VaR with Historical Simulation
@@ -584,4 +488,186 @@ print('Portfolios (KDE):', portfolio_var_hist_kde)
 print('Total (KDE):', total_var_hist_kde)
 
 
+# Now Normal Monte Carlo with Exponentially Weighted Covariance Matrix
 
+
+# Get (mean centered) returns of all stocks in portfolio
+portfolio_returns = mean_centered_returns[portfolio_df['Stock']]
+
+# Retrieve the most recent prices for these stocks
+current_stock_prices = daily_prices[portfolio_df['Stock']].iloc[-1]
+
+# Compute exponentially weighted covariance matrix for portfolio returns
+ew_cov_matrix = ewCovar(portfolio_returns, lambda_=0.94)
+
+
+def simulate_pca(a, nsim, pctExp=1, mean=None, seed=1234):
+    """
+    Simulate a multivariate normal distribution using PCA based on a covariance matrix and an optional percentage of
+    variance explained (indirectly the number of eigenvalues/principal components to include).
+    :param a: The input covariance matrix
+    :param nsim: Specifies the number of samples to simulate
+    :param pctExp: (optional) The percentage of total variance that should be explained by the principal components. The
+    default is 100%
+    :param mean: (optional) The mean vector of the covariance matrix. If not provided the default mean is zero
+    :param seed: (optional) The seed for random number generation to ensure reproducibility
+    :return: out: The matrix of simulated samples
+    """
+    n = a.shape[0]
+
+    if mean is None:
+        _mean = np.zeros(n)
+    else:
+        _mean = np.array(mean)
+
+    # Eigenvalue decomposition
+    vals, vecs = np.linalg.eigh(a)
+    vals = np.real(vals)
+    vecs = np.real(vecs)
+    # Sort values and vectors in descending order
+    idx = vals.argsort()[::-1]
+    vals = vals[idx]
+    vecs = vecs[:, idx]
+
+    tv = np.sum(vals)
+
+    posv = np.where(vals >= 1e-8)[0]
+    if pctExp < 1:
+        pct = 0.0
+        for i in posv:
+            pct += vals[i] / tv
+            if pct >= pctExp:
+                posv = posv[:np.where(posv == i)[0][0] + 1]
+                break
+    vals = vals[posv]
+    vecs = vecs[:, posv]
+
+    # Construct B matrix
+    B = vecs @ np.diag(np.sqrt(vals))
+
+    # Generate random samples
+    np.random.seed(seed)
+    r = np.random.randn(vals.shape[0], nsim)
+    print(B.shape, r.shape)
+    out = (B @ r).T
+
+    # Add the mean
+    for i in range(n):
+        out[:, i] += _mean[i]
+
+    return out
+
+
+nsim = 10000
+nmc_sim = simulate_pca(ew_cov_matrix, nsim)
+sim_returns = pd.DataFrame(nmc_sim, columns=portfolio_df.Stock)
+
+# Cross-joining portfolio and iterations
+iterations = pd.DataFrame({'iteration': range(1, nsim + 1)})
+values = pd.merge(portfolio_df.assign(key=1), iterations.assign(key=1), on='key').drop('key', axis=1)
+
+
+# Pricing function
+def pricing(row):
+    """
+        Calculate the current and simulated values of a portfolio holding, and its PnL.
+
+        The function takes a row from a DataFrame where each row combines a stock in the portfolio
+        with a simulation iteration. It uses the current stock price and simulated returns to
+        calculate the current value, simulated value, and PnL for the holding.
+
+        Parameters:
+        :param: row (pandas Series): A row from the DataFrame. The row must contain:
+            - 'Stock': Stock identifier (e.g., ticker symbol).
+            - 'Holding': Quantity of the stock held in the portfolio.
+            - 'iteration': Iteration number of the simulation.
+          The `current` and `simReturns` data structures should be accessible in the scope
+          where this function is called. `current` should be a Series or a DataFrame row
+          with the current prices of stocks, and `simReturns` a DataFrame with simulated
+          returns for each stock across different iterations.
+
+        Returns:
+        :return: current_value (float): The current value of the holding, calculated as Holding * current price.
+        :return: simulated_value (float): The simulated value of the holding, adjusted by the simulated return.
+        :return:  pnl (float): Profit and Loss for the holding, calculated as the difference between
+                       simulated value and current value.
+        """
+    # Extracting current price for the given stock
+    price = current_stock_prices[row['Stock']]
+
+    # Calculating current value of the holding
+    current_value = row['Holding'] * price
+
+    # Calculating simulated value of the holding (adjusted by simulated return)
+    simulated_value = row['Holding'] * price * (1.0 + sim_returns.loc[row['iteration'] - 1, row['Stock']])
+
+    # Calculating PnL for the holding
+    pnl = simulated_value - current_value
+    return current_value, simulated_value, pnl
+
+
+# Applying the pricing function in parallel
+with ThreadPoolExecutor() as executor:
+    results = list(executor.map(pricing, values.to_dict(orient='records')))
+
+# Extracting results
+current_values, simulated_values, pnls = zip(*results)
+values['currentValue'] = current_values
+values['simulatedValue'] = simulated_values
+values['pnl'] = pnls
+
+
+def calculate_var(series, alpha=0.05):
+    """
+    Calculate the Value at Risk (VaR) at a specified confidence level.
+
+    Parameters:
+    - series (pandas Series): A series of profit and loss (PnL) values.
+    - alpha (float): The confidence level (default is 0.05 for 95% confidence).
+
+    Returns:
+    - VaR (float): The calculated Value at Risk.
+    """
+    return -np.percentile(series, 100 * alpha)
+
+
+# Portfolio Level Metrics
+
+# Summing by Portfolio and Iteration
+gdf = values.groupby(['Portfolio', 'iteration'])
+portfolio_values = gdf.agg({'currentValue': 'sum', 'pnl': 'sum'}).reset_index()
+
+# Calculating Portfolio Level Risk Metrics
+gdf = portfolio_values.groupby('Portfolio')
+portfolio_risk = gdf.agg({
+    'currentValue': 'first',
+    'pnl': lambda x: calculate_var(x, alpha=0.05)
+}).rename(columns={'currentValue': 'currentValue', 'pnl': 'VaR95'})
+
+# Total Metrics
+
+# Grouping by iteration and summing the values
+gdf = values.groupby('iteration')
+total_values = gdf.agg({'currentValue': 'sum', 'pnl': 'sum'}).reset_index()
+
+# Separating the aggregation and transformation operations
+# Get the first currentValue
+total_current_value = total_values['currentValue'].iloc[0]
+
+# Correct calculation of VaR for total risk
+total_pnl_var = calculate_var(total_values['pnl'], alpha=0.05)
+
+# Constructing the total_risk DataFrame
+total_risk = pd.DataFrame({
+    'currentValue': [total_current_value],
+    'VaR95': [total_pnl_var],
+    'Portfolio': 'Total'
+})
+
+# Visualize
+
+# Concatenate the portfolioRisk and totalRisk DataFrames
+VaRReport = pd.concat([portfolio_risk, total_risk], ignore_index=True)
+
+# Print the VaRReport DataFrame
+print(VaRReport)

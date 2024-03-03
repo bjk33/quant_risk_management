@@ -59,14 +59,7 @@
             </Attribute>
           </value>
         </entry>
-        <entry key="/ew_cov_matrix.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
-        <entry key="/mean_centered_returns.csv">
+        <entry key="/Week04_Project/mean_centered_returns.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />
