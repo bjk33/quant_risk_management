@@ -128,17 +128,18 @@ def mean_center_series(df, column_name):
     return df
 
 
-mean_centered_returns = mean_center_series(arithmetic_returns, "META")
+meta_mean_centered_returns = mean_center_series(arithmetic_returns, "META")
 
 # Mean Check
 
 # Calculate the mean of the 'META' column
-mean_meta = mean_centered_returns['META'].mean()
+mean_meta = meta_mean_centered_returns['META'].mean()
 # Print the mean to verify
 print("Mean of 'META' after mean-centering:", mean_meta)
 
 # Calculating VaR 5 Ways
-meta_returns = mean_centered_returns['META']
+meta_returns = arithmetic_returns['META']
+meta_returns = meta_returns - meta_returns.mean() # center mean
 alpha = 0.05
 confidence_level = 1 - alpha
 
@@ -199,8 +200,21 @@ new_prices = (1 + sampled_returns) * current_price
 # Calculate VaR
 var = np.percentile(new_prices, (alpha) * 100)
 var_hist = current_price - var
-print(var_hist/current_price)
-print("Historical VaR with KDE at 95% confidence level:", var_hist)
+var_hist_ret = var_hist / current_price
+
+print("Historical VaR with KDE at 95% confidence level:", var_hist_ret)
+
+
+# Alternative Historic Simulation (no KDE)
+def VaR(a, alpha=0.05):
+    x = np.sort(a)
+    nup = int(np.ceil(len(a) * alpha))
+    ndn = int(np.floor(len(a) * alpha))
+    v = 0.5 * (x[nup] + x[ndn])
+
+    return -v
+
+print(VaR(meta_returns, alpha=0.05))
 
 # Problem 3 #
 
@@ -209,6 +223,7 @@ print("Historical VaR with KDE at 95% confidence level:", var_hist)
 # Load portfolio
 portfolio_path = '/Users/brandonkaplan/Desktop/FINTECH545/Week04_Project/portfolio.csv'
 portfolio_df = pd.read_csv(portfolio_path)
+
 
 def ewCovar(x, lambda_):
     """Compute exponentially weighted covariance matrix of a dataframe.
@@ -226,23 +241,20 @@ def ewCovar(x, lambda_):
     # Step 2: Calculate weights (note we are going from oldest to newest weight)
     for i in range(m):
         weights[i] = (1 - lambda_) * lambda_ ** (m - i - 1)
-    # Step 3: Normalize weights to 1
-    weights /= np.sum(weights)
 
-    # Step 4: Compute the covariance matrix: covariance[i,j] = (w dot x)' * x where dot denotes element-wise mult
-    weighted_x = x * weights[:, np.newaxis]  # broadcast weights to each row
-    cov_matrix = np.dot(weighted_x.T, weighted_x)  # compute the matrix product
+    weights_mat = np.diag(weights/sum(weights))
+    cov_matrix = np.transpose(x.values) @ weights_mat @ x.values
     return cov_matrix
 
 
 # Mean-centering each stock's returns in the daily_returns_df
 mean_centered_returns = arithmetic_returns.iloc[:, 1:] - arithmetic_returns.iloc[:, 1:].mean()
-mean_centered_returns = mean_centered_returns.iloc[:, 1:]  # Exclude 'Date' column
+# mean_centered_returns = mean_centered_returns.iloc[:, 1:]  # Exclude 'Date' column
 
 # Calculate EW Covariance Matrix
 lambda_factor = 0.94
 ew_cov_matrix = ewCovar(mean_centered_returns, lambda_factor)
-# ew_cov_matrix = pd.DataFrame(ew_cov_matrix)
+
 
 
 def calculate_portfolio_values(prices_df, portfolio_df):
@@ -309,8 +321,6 @@ def calculate_portfolio_weights(prices_df, portfolio_df, portfolio_totals):
         dollar_values = dollar_values.dropna()
     # Calculate weights
     weights = dollar_values.divide(portfolio_totals)
-    print(weights.shape)
-    print(weights['A'].sum())
     return weights
 
 
@@ -362,7 +372,7 @@ print(var_results)
 # implementation of professor's delta normal
 def delta_normal_var(portfolio_df, prices_df, returns_df, lambda_factor, z_score):
     """
-    Calculate the Delta Normal VaR for each portfolio.
+    Calculate the Delta Normal VaR for each portfolio and total.
 
     :param portfolio_df: DataFrame with portfolio holdings (quantity of shares)
     :param prices_df: DataFrame with stock prices
@@ -417,36 +427,19 @@ def delta_normal_var(portfolio_df, prices_df, returns_df, lambda_factor, z_score
 
     return var_values
 
+
 # Usage
+
 z_score = 0.05  # For a 95% confidence level
 lambda_factor = 0.94
 
 
-# Calculate VaR for each portfolio
+# Calculate VaR for each portfolio and the total
 var_results = delta_normal_var(portfolio_df, daily_prices, mean_centered_returns, lambda_factor, z_score)
 print(var_results)
 
 
 # Now to calculate VaR with Historical Simulation
-
-# First, reshape the daily returns dataframe to merge it with the portfolio holdings
-dates = arithmetic_returns.iloc[:, 0]
-mean_centered_returns = pd.concat([dates, mean_centered_returns], axis=1)
-mean_centered_returns_reshaped = mean_centered_returns.melt(id_vars='Date', var_name='Stock', value_name='Return')
-
-# Merge the portfolio holdings with the reshaped daily returns
-portfolio_with_centered_returns = pd.merge(portfolio_df, mean_centered_returns_reshaped, on='Stock')
-
-# Calculate the daily value change for each stock in each portfolio
-portfolio_with_centered_returns['DailyValueChange'] = portfolio_with_centered_returns.apply(
-    lambda row: row['Holding'] * row['Return'] * current_stock_prices[row['Stock']], axis=1)
-
-# Aggregate daily portfolio values
-daily_portfolio_values_mean_centered = (portfolio_with_centered_returns.groupby(['Date', 'Portfolio'])
-                                        ['DailyValueChange'].sum().reset_index())
-
-# Calculate total portfolio value over time
-total_daily_value_change_mean_centered = daily_portfolio_values_mean_centered.groupby('Date')['DailyValueChange'].sum()
 
 
 def calculate_historical_var_kde(value_changes, alpha):
@@ -477,6 +470,27 @@ def calculate_historical_var_kde(value_changes, alpha):
     return -var
 
 
+# Usage
+
+# First, reshape the daily returns dataframe to merge it with the portfolio holdings
+dates = arithmetic_returns.iloc[:, 0]
+mean_centered_returns = pd.concat([dates, mean_centered_returns], axis=1)
+mean_centered_returns_reshaped = mean_centered_returns.melt(id_vars='Date', var_name='Stock', value_name='Return')
+
+# Merge the portfolio holdings with the reshaped daily returns
+portfolio_with_centered_returns = pd.merge(portfolio_df, mean_centered_returns_reshaped, on='Stock')
+
+# Calculate the daily value change for each stock in each portfolio
+portfolio_with_centered_returns['DailyValueChange'] = portfolio_with_centered_returns.apply(
+    lambda row: row['Holding'] * row['Return'] * current_stock_prices[row['Stock']], axis=1)
+
+# Aggregate daily portfolio values
+daily_portfolio_values_mean_centered = (portfolio_with_centered_returns.groupby(['Date', 'Portfolio'])
+                                        ['DailyValueChange'].sum().reset_index())
+
+# Calculate total portfolio value over time
+total_daily_value_change_mean_centered = daily_portfolio_values_mean_centered.groupby('Date')['DailyValueChange'].sum()
+
 alpha = 0.05
 # Calculate Historical VaR with KDE for each portfolio
 portfolio_var_hist_kde = (daily_portfolio_values_mean_centered.groupby('Portfolio')['DailyValueChange'].apply
@@ -490,7 +504,7 @@ print('Portfolios (Historical - KDE):', portfolio_var_hist_kde)
 print('Total (Historical - KDE):', total_var_hist_kde)
 
 
-def calculate_portfolio_var_historical(portfolio_holdings, current_prices, historical_returns, alpha, n_simulations):
+def calculate_portfolio_var_hist(portfolio_holdings, current_prices, historical_returns, alpha, n_simulations):
     """
     Calculate Historical VaR for a given portfolio.
     Parameters:
@@ -517,6 +531,8 @@ def calculate_portfolio_var_historical(portfolio_holdings, current_prices, histo
     return current_portfolio_value - var_value
 
 
+# Usage
+
 alpha = 0.05  # 95% confidence level
 n_simulations = 10000
 current_stock_prices = daily_prices[portfolio_df['Stock']].iloc[-1]
@@ -528,7 +544,7 @@ total_holdings = {}
 for portfolio in portfolio_df['Portfolio'].unique():
     portfolio_holdings = portfolio_df[portfolio_df['Portfolio'] == portfolio].set_index('Stock')[
         'Holding'].to_dict()
-    portfolio_vars[portfolio] = calculate_portfolio_var_historical(portfolio_holdings, current_stock_prices, mean_centered_returns, alpha,
+    portfolio_vars[portfolio] = calculate_portfolio_var_hist(portfolio_holdings, current_stock_prices, mean_centered_returns, alpha,
                                                         n_simulations)
     # Aggregate holdings for the total portfolio
     for stock, holding in portfolio_holdings.items():
@@ -536,7 +552,7 @@ for portfolio in portfolio_df['Portfolio'].unique():
             total_holdings[stock] = 0
         total_holdings[stock] += holding
 # Calculate VaR for the total portfolio
-total_var = calculate_portfolio_var_historical(total_holdings, current_stock_prices, mean_centered_returns, alpha, n_simulations)
+total_var = calculate_portfolio_var_hist(total_holdings, current_stock_prices, mean_centered_returns, alpha, n_simulations)
 # Output
 print("Individual Portfolios Historical Simulation VaR:", portfolio_vars)
 print("Total Portfolio Historical Simulation VaR:", total_var)
@@ -544,16 +560,7 @@ print("Total Portfolio Historical Simulation VaR:", total_var)
 
 # Now Normal Monte Carlo with Exponentially Weighted Covariance Matrix
 
-
-# Get (mean centered) returns of all stocks in portfolio
-portfolio_returns = mean_centered_returns[portfolio_df['Stock']]
-
-# Retrieve the most recent prices for these stocks
-current_stock_prices = daily_prices[portfolio_df['Stock']].iloc[-1]
-
-# Compute exponentially weighted covariance matrix for portfolio returns
-ew_cov_matrix = ewCovar(portfolio_returns, lambda_=0.94)
-
+# First simulate PCA
 
 def simulate_pca(a, nsim, pctExp=1, mean=None, seed=1234):
     """
@@ -612,6 +619,13 @@ def simulate_pca(a, nsim, pctExp=1, mean=None, seed=1234):
     return out
 
 
+# Usage
+
+# Get (mean centered) returns of all stocks in portfolio
+portfolio_returns = mean_centered_returns[portfolio_df['Stock']]
+
+# Compute exponentially weighted covariance matrix for portfolio returns
+ew_cov_matrix = ewCovar(portfolio_returns, lambda_=0.94)
 nsim = 10000
 nmc_sim = simulate_pca(ew_cov_matrix, nsim)
 sim_returns = pd.DataFrame(nmc_sim, columns=portfolio_df.Stock)
@@ -622,7 +636,7 @@ values = pd.merge(portfolio_df.assign(key=1), iterations.assign(key=1), on='key'
 
 
 # Pricing function
-def pricing(row):
+def pricing(row, prices, portfolio):
     """
         Calculate the current and simulated values of a portfolio holding, and its PnL.
 
@@ -646,6 +660,10 @@ def pricing(row):
         :return:  pnl (float): Profit and Loss for the holding, calculated as the difference between
                        simulated value and current value.
         """
+
+    # All current stock prices
+    current_stock_prices = prices[portfolio['Stock']].iloc[-1]
+
     # Extracting current price for the given stock
     price = current_stock_prices[row['Stock']]
 
@@ -684,6 +702,7 @@ def calculate_var(series, alpha=0.05):
     """
     return -np.percentile(series, 100 * alpha)
 
+# Usage
 
 # Portfolio Level Metrics
 

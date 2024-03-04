@@ -118,12 +118,10 @@ def ewCovar(x, lambda_):
     # Step 2: Calculate weights (note we are going from oldest to newest weight)
     for i in range(m):
         weights[i] = (1 - lambda_) * lambda_ ** (m - i - 1)
-    # Step 3: Normalize weights to 1
-    weights /= np.sum(weights)
 
-    # Step 4: Compute the covariance matrix: covariance[i,j] = (w dot x)' * x where dot denotes element-wise mult
-    weighted_x = x * weights[:, np.newaxis]  # broadcast weights to each row
-    cov_matrix = np.dot(weighted_x.T, weighted_x)  # compute the matrix product
+    weights_mat = np.diag(weights / sum(weights))
+    cov_matrix = np.transpose(x.values) @ weights_mat @ x.values
+
     return cov_matrix
 
 
@@ -526,30 +524,6 @@ def return_calc(prices, method="DISCRETE", date_column="Date"):
     return out
 
 
-def mean_center_series(df, column_name):
-    """
-    This function adjusts the specified column in a DataFrame such that its mean is zero.
-    Parameters:
-    :param: df (DataFrame): DataFrame containing the data.
-    :param: column_name (str): Name of the column to be mean-centered.
-    Returns:
-    :return: df: DataFrame: A new DataFrame with the specified column mean-centered.
-    """
-    # Check if the column exists in the DataFrame
-    if column_name not in df.columns:
-
-        raise ValueError(f"Column {column_name} not found in DataFrame.")
-
-    # Calculate the mean of the specified column
-
-    column_mean = df[column_name].mean()
-
-    # Subtract the mean from the column to mean-center it
-
-    df[column_name] = df[column_name] - column_mean
-
-    return df
-
 # VaR: Five Ways
 
 
@@ -670,3 +644,287 @@ def calculate_var_ar1(returns, alpha):
     z_score = norm.ppf(alpha)
     var = -(forecast + z_score * residuals_std)
     return var
+
+
+def calculate_var_hist_KDE(returns, prices, stock, nsim, alpha):
+    """
+    Calculates historical VaR by sampling from historical returns. Uses a Gaussian Kernel Density Estimator to smooth
+    returns data.
+    :param returns: Pandas DataFrame: Returns data of a portfolio.
+    :param prices: Pandas DataFrame: Price data for stock
+    :param stock: str: Stock name from portfolio you want to find current price for
+    :param nsim: int: Number of samples from historical returns
+    :param alpha: float: Confidence level/probability of VaR break (0.05 implies 95% confidence)
+    :return: var_hist: float: The calculated VaR in dollars
+    :return: var_hist_return: The calculated VaR expressed as a return
+    """
+    current_price = prices[stock].iloc[-1]  # This is the most recent META price
+
+    # Fit KDE to the returns
+    kde = gaussian_kde(returns)
+
+    # Generate random numbers from the KDE
+    sampled_returns = kde.resample(nsim)[0]
+
+    # Calculate new prices from the returns
+    new_prices = (1 + sampled_returns) * current_price
+
+    # Calculate VaR
+    var = np.percentile(new_prices, (alpha) * 100)
+    var_hist = current_price - var
+    var_hist_ret = var_hist / current_price
+    return var_hist_ret, var_hist
+
+
+def VaR(a, alpha=0.05):
+    """
+    Calculate the Value at Risk (VaR) for a given array of financial data.
+
+    Parameters:
+    :param: a (array-like): An array of historical financial data (e.g., returns or prices).
+    :param: alpha (float, optional): The confidence level, representing the probability of
+                             exceeding the VaR. Default value is 0.05 (95% confidence level).
+
+    Returns:
+    :return: -v: float: The calculated Value at Risk (VaR). The value is returned as a negative
+           number, indicating a potential loss in the context of the given confidence level.
+    """
+    x = np.sort(a)
+    nup = int(np.ceil(len(a) * alpha))
+    ndn = int(np.floor(len(a) * alpha))
+    v = 0.5 * (x[nup] + x[ndn])
+
+    return -v
+
+
+def calculate_portfolio_values(prices_df, portfolio_df):
+    """
+    Calculate the total value of each portfolio.
+
+    Parameters:
+    :param: prices_df (Pandas DataFrame): Data frame of stock prices
+    :param: portfolio_df (Pandas DataFrame): Data frame containing different portfolios and their holdings of the stocks
+
+    Returns:
+    :return: pd.Series: Total value of each portfolio.
+    """
+
+    # Get the latest prices for each stock
+    latest_prices = prices_df.iloc[-1, 1:]  # Skipping the 'Date' column
+    latest_prices = latest_prices.astype(float)  # Convert prices to float
+
+    # Pivot the portfolio DataFrame to align with the stock symbols
+    restructured_portfolio = (portfolio_df.pivot_table(index='Stock', columns='Portfolio', values='Holding',
+                                                       fill_value=0))
+
+    # Calculate the current value of each stock in each portfolio
+    portfolio_values = restructured_portfolio.multiply(latest_prices, axis=0)
+
+    # Calculate the total value of each portfolio
+    portfolio_totals = portfolio_values.sum(axis=0)
+
+    return portfolio_totals
+
+
+def calculate_portfolio_weights(prices_df, portfolio_df, portfolio_totals):
+    """
+    Calculate the weights of each stock in each portfolio.
+
+    :param prices_df: DataFrame with stock prices
+    :param portfolio_df: DataFrame with portfolio holdings (quantity of shares)
+    :param portfolio_totals: Series with total value of each portfolio
+    :return: DataFrame with weights of each stock in each portfolio
+    """
+    # Get the latest prices for each stock
+    latest_prices = prices_df.iloc[-1, 1:]  # Assuming the last row contains the latest prices
+
+    # Pivot the portfolio DataFrame to align with the stock symbols
+    restructured_portfolio = portfolio_df.pivot_table(index='Stock', columns='Portfolio', values='Holding',
+                                                      fill_value=0)
+
+    # Calculate the dollar value of each holding
+    dollar_values = restructured_portfolio.multiply(latest_prices, axis=0)
+
+    # Identify the row(s) with NaN values
+    nan_rows = dollar_values[dollar_values.isna().all(axis=1)]
+
+    # If there's exactly one row with NaN values, and it's the extra row, remove it
+    if len(nan_rows) == 1:
+        dollar_values = dollar_values.dropna()
+    # Calculate weights
+    weights = dollar_values.divide(portfolio_totals)
+    return weights
+
+
+def delta_normal_var(portfolio_df, prices_df, returns_df, lambda_factor, z_score):
+    """
+    Calculate the Delta Normal VaR for each portfolio and total.
+
+    :param portfolio_df: DataFrame with portfolio holdings (quantity of shares)
+    :param prices_df: DataFrame with stock prices
+    :param returns_df: DataFrame with stock returns
+    :param lambda_factor: Lambda factor for exponentially weighted covariance
+    :param z_score: Z-Score for the desired confidence level
+    :return: Dictionary with VaR for each portfolio
+    """
+    var_values = {}
+    total_holdings = {}
+    total_portfolio_value = 0
+
+    for portfolio in portfolio_df['Portfolio'].unique():
+        holdings = portfolio_df[portfolio_df['Portfolio'] == portfolio]
+        relevant_stocks = holdings['Stock'].tolist()
+        current_prices = prices_df[relevant_stocks].iloc[-1]
+        filtered_returns = returns_df[relevant_stocks]
+
+        # Calculate portfolio value
+        portfolio_value = (sum(holdings[holdings['Stock'] == stock]['Holding'].iloc[0] * current_prices[stock] for
+                               stock in relevant_stocks))
+        # And total value
+        total_portfolio_value += portfolio_value
+
+        # Aggregate holdings for total portfolio calculation
+        for stock in relevant_stocks:
+            if stock not in total_holdings:
+                total_holdings[stock] = 0
+            total_holdings[stock] += holdings[holdings['Stock'] == stock]['Holding'].iloc[0] * current_prices[stock]
+
+        # Calculate delta (portfolio weights)
+        delta = (np.array([holdings[holdings['Stock'] == stock]['Holding'].iloc[0] * current_prices[stock] /
+                           portfolio_value for stock in relevant_stocks]))
+
+        # Calculate covariance matrix
+        cov_matrix = ewCovar(filtered_returns, lambda_factor)
+
+        # Portfolio standard deviation
+        portfolio_std_dev = np.sqrt(np.dot(delta.T, np.dot(cov_matrix, delta)))
+
+        # Calculate VaR
+        var = -portfolio_value * norm.ppf(z_score) * portfolio_std_dev
+        var_values[portfolio] = var
+
+    # Total portfolio VaR calculation
+    relevant_stocks = list(total_holdings.keys())
+    total_delta = np.array([total_holdings[stock] / total_portfolio_value for stock in relevant_stocks])
+    total_cov_matrix = ewCovar(returns_df[relevant_stocks], lambda_factor)
+    total_portfolio_std_dev = np.sqrt(np.dot(total_delta.T, np.dot(total_cov_matrix, total_delta)))
+    total_var = -total_portfolio_value * norm.ppf(z_score) * total_portfolio_std_dev
+    var_values['Total'] = total_var
+
+    return var_values
+
+
+def calculate_historical_var_kde(value_changes, alpha):
+    """
+    Calculate Historical VaR using KDE for a series of value changes.
+
+    Parameters:
+    :param: value_changes (Series): Pandas Series of value changes.
+    :param: alpha (float): Confidence level for VaR (e.g., 0.05 for 95%).
+
+    Returns:
+    float: The calculated VaR.
+    """
+    # Fit a KDE to the value changes
+    kde = gaussian_kde(value_changes)
+
+    # Generate a range of values (e.g., from -3*std to 3*std)
+    range_min = value_changes.min()
+    range_max = value_changes.max()
+    x_values = np.linspace(range_min, range_max, 10000)
+
+    # Evaluate the cumulative distribution of the KDE
+    cdf = np.array([kde.integrate_box_1d(range_min, x) for x in x_values])
+
+    # Find the VaR as the point where the CDF reaches the desired confidence level
+    var_index = np.where(cdf >= (alpha))[0][0]
+    var = x_values[var_index]
+    return -var
+
+
+def calculate_portfolio_var_hist(portfolio_holdings, current_prices, historical_returns, alpha, n_simulations):
+    """
+    Calculate Historical VaR for a given portfolio.
+    Parameters:
+    - portfolio_holdings (dict): Dictionary of holdings (quantity of each asset).
+    - current_prices (dict): Dictionary of current prices for each asset.
+    - historical_returns (DataFrame): DataFrame of historical returns.
+    - alpha (float): Confidence level for VaR (e.g., 0.95 for 95% confidence).
+    - n_simulations (int): Number of simulations.
+    Returns:
+    - float: The calculated VaR for the portfolio.
+    """
+    current_portfolio_value = sum(portfolio_holdings[stock] * current_prices[stock] for stock in portfolio_holdings)
+    simulated_values = []
+    for _ in range(n_simulations):
+        # Sample from historical returns
+        sampled_returns = historical_returns.sample(n=1, replace=True)
+        # Calculate new portfolio value based on sampled returns
+        new_value = sum(
+            portfolio_holdings[stock] * current_prices[stock] * (1 + sampled_returns[stock].iloc[0]) for stock in
+            portfolio_holdings)
+        simulated_values.append(new_value)
+    # Find the α% of the simulated portfolio value distribution
+    var_value = np.percentile(simulated_values, alpha * 100)
+    return current_portfolio_value - var_value
+
+
+def pricing(row, prices, portfolio, sim_returns):
+    """
+        Calculate the current and simulated values of a portfolio holding, and its PnL.
+
+        The function takes a row from a DataFrame where each row combines a stock in the portfolio
+        with a simulation iteration. It uses the current stock price and simulated returns to
+        calculate the current value, simulated value, and PnL for the holding.
+
+        Parameters:
+        :param: row (pandas Series): A row from the DataFrame. The row must contain:
+            - 'Stock': Stock identifier (e.g., ticker symbol).
+            - 'Holding': Quantity of the stock held in the portfolio.
+            - 'iteration': Iteration number of the simulation.
+          The `current` and `simReturns` data structures should be accessible in the scope
+          where this function is called. `current` should be a Series or a DataFrame row
+          with the current prices of stocks, and `simReturns` a DataFrame with simulated
+          returns for each stock across different iterations.
+        :param: prices: (pandas DataFrame): A dataframe containing price data
+        :param: portfolio: (pandas DataFrame): A data containing portfolio holdings
+        :param: sim_returns: (pandas DataFrame): A dataframe containing simulated returns (normal monte carlo w/ PCA and
+        covariance matrix) for all stocks
+
+        Returns:
+        :return: current_value (float): The current value of the holding, calculated as Holding * current price.
+        :return: simulated_value (float): The simulated value of the holding, adjusted by the simulated return.
+        :return:  pnl (float): Profit and Loss for the holding, calculated as the difference between
+                       simulated value and current value.
+        """
+
+    # All current stock prices
+    current_stock_prices = prices[portfolio['Stock']].iloc[-1]
+
+    # Extracting current price for the given stock
+    price = current_stock_prices[row['Stock']]
+
+    # Calculating current value of the holding
+    current_value = row['Holding'] * price
+
+    # Calculating simulated value of the holding (adjusted by simulated return)
+    simulated_value = row['Holding'] * price * (1.0 + sim_returns.loc[row['iteration'] - 1, row['Stock']])
+
+    # Calculating PnL for the holding
+    pnl = simulated_value - current_value
+    return current_value, simulated_value, pnl
+
+
+def calculate_var(series, alpha=0.05):
+    """
+    Calculate the Value at Risk (VaR) at a specified confidence level. Use this for portfolio and group metrics for
+    Normal Monte Carlo VaR.
+
+    Parameters:
+    - series (pandas Series): A series of profit and loss (PnL) values.
+    - alpha (float): The confidence level (default is 0.05 for 95% confidence).
+
+    Returns:
+    - VaR (float): The calculated Value at Risk.
+    """
+    return -np.percentile(series, 100 * alpha)
