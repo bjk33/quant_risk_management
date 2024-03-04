@@ -236,12 +236,11 @@ def ewCovar(x, lambda_):
 
 
 # Mean-centering each stock's returns in the daily_returns_df
-for asset in arithmetic_returns.columns[1:]:  # Skipping the 'Date' column
-    mean_centered_returns = mean_center_series(arithmetic_returns, asset)
+mean_centered_returns = arithmetic_returns.iloc[:, 1:] - arithmetic_returns.iloc[:, 1:].mean()
+mean_centered_returns = mean_centered_returns.iloc[:, 1:]  # Exclude 'Date' column
 
 # Calculate EW Covariance Matrix
 lambda_factor = 0.94
-mean_centered_returns = mean_centered_returns.iloc[:, 1:]  # Exclude 'Date' column
 ew_cov_matrix = ewCovar(mean_centered_returns, lambda_factor)
 # ew_cov_matrix = pd.DataFrame(ew_cov_matrix)
 
@@ -431,6 +430,8 @@ print(var_results)
 # Now to calculate VaR with Historical Simulation
 
 # First, reshape the daily returns dataframe to merge it with the portfolio holdings
+dates = arithmetic_returns.iloc[:, 0]
+mean_centered_returns = pd.concat([dates, mean_centered_returns], axis=1)
 mean_centered_returns_reshaped = mean_centered_returns.melt(id_vars='Date', var_name='Stock', value_name='Return')
 
 # Merge the portfolio holdings with the reshaped daily returns
@@ -448,7 +449,7 @@ daily_portfolio_values_mean_centered = (portfolio_with_centered_returns.groupby(
 total_daily_value_change_mean_centered = daily_portfolio_values_mean_centered.groupby('Date')['DailyValueChange'].sum()
 
 
-def calculate_historical_var_kde(value_changes, confidence_level):
+def calculate_historical_var_kde(value_changes, alpha):
     """
     Calculate Historical VaR using KDE for a series of value changes.
 
@@ -465,27 +466,80 @@ def calculate_historical_var_kde(value_changes, confidence_level):
     # Generate a range of values (e.g., from -3*std to 3*std)
     range_min = value_changes.min()
     range_max = value_changes.max()
-    x_values = np.linspace(range_min, range_max, 1000)
+    x_values = np.linspace(range_min, range_max, 10000)
 
     # Evaluate the cumulative distribution of the KDE
     cdf = np.array([kde.integrate_box_1d(range_min, x) for x in x_values])
 
     # Find the VaR as the point where the CDF reaches the desired confidence level
-    var_index = np.where(cdf >= (1 - confidence_level))[0][0]
+    var_index = np.where(cdf >= (alpha))[0][0]
     var = x_values[var_index]
     return -var
 
 
+alpha = 0.05
 # Calculate Historical VaR with KDE for each portfolio
 portfolio_var_hist_kde = (daily_portfolio_values_mean_centered.groupby('Portfolio')['DailyValueChange'].apply
-                          (lambda x: calculate_historical_var_kde(x, confidence_level)))
+                          (lambda x: calculate_historical_var_kde(x, alpha)))
 
 # Calculate Historical VaR with KDE for the total holdings
-total_var_hist_kde = calculate_historical_var_kde(total_daily_value_change_mean_centered, confidence_level)
+total_var_hist_kde = calculate_historical_var_kde(total_daily_value_change_mean_centered, alpha)
 
 # Display the calculated VaR for each portfolio and the total holdings with KDE
-print('Portfolios (KDE):', portfolio_var_hist_kde)
-print('Total (KDE):', total_var_hist_kde)
+print('Portfolios (Historical - KDE):', portfolio_var_hist_kde)
+print('Total (Historical - KDE):', total_var_hist_kde)
+
+
+def calculate_portfolio_var_historical(portfolio_holdings, current_prices, historical_returns, alpha, n_simulations):
+    """
+    Calculate Historical VaR for a given portfolio.
+    Parameters:
+    - portfolio_holdings (dict): Dictionary of holdings (quantity of each asset).
+    - current_prices (dict): Dictionary of current prices for each asset.
+    - historical_returns (DataFrame): DataFrame of historical returns.
+    - alpha (float): Confidence level for VaR (e.g., 0.95 for 95% confidence).
+    - n_simulations (int): Number of simulations.
+    Returns:
+    - float: The calculated VaR for the portfolio.
+    """
+    current_portfolio_value = sum(portfolio_holdings[stock] * current_prices[stock] for stock in portfolio_holdings)
+    simulated_values = []
+    for _ in range(n_simulations):
+        # Sample from historical returns
+        sampled_returns = historical_returns.sample(n=1, replace=True)
+        # Calculate new portfolio value based on sampled returns
+        new_value = sum(
+            portfolio_holdings[stock] * current_prices[stock] * (1 + sampled_returns[stock].iloc[0]) for stock in
+            portfolio_holdings)
+        simulated_values.append(new_value)
+    # Find the α% of the simulated portfolio value distribution
+    var_value = np.percentile(simulated_values, alpha * 100)
+    return current_portfolio_value - var_value
+
+
+alpha = 0.05  # 95% confidence level
+n_simulations = 10000
+current_stock_prices = daily_prices[portfolio_df['Stock']].iloc[-1]
+
+
+portfolio_vars = {}
+total_holdings = {}
+# Calculate VaR for each portfolio
+for portfolio in portfolio_df['Portfolio'].unique():
+    portfolio_holdings = portfolio_df[portfolio_df['Portfolio'] == portfolio].set_index('Stock')[
+        'Holding'].to_dict()
+    portfolio_vars[portfolio] = calculate_portfolio_var_historical(portfolio_holdings, current_stock_prices, mean_centered_returns, alpha,
+                                                        n_simulations)
+    # Aggregate holdings for the total portfolio
+    for stock, holding in portfolio_holdings.items():
+        if stock not in total_holdings:
+            total_holdings[stock] = 0
+        total_holdings[stock] += holding
+# Calculate VaR for the total portfolio
+total_var = calculate_portfolio_var_historical(total_holdings, current_stock_prices, mean_centered_returns, alpha, n_simulations)
+# Output
+print("Individual Portfolios Historical Simulation VaR:", portfolio_vars)
+print("Total Portfolio Historical Simulation VaR:", total_var)
 
 
 # Now Normal Monte Carlo with Exponentially Weighted Covariance Matrix
