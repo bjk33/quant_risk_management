@@ -130,7 +130,8 @@ print("Series ES - Historic Simulation:", es_hist)
 
 # Problem 3 #
 
-# Portfolio VaR and ES
+# Portfolio VaR and ES with copula
+
 prices_path = '/Users/brandonkaplan/Desktop/FINTECH545/Week05_Project/DailyPrices.csv'
 portfolio_path = '/Users/brandonkaplan/Desktop/FINTECH545/Week05_Project/portfolio.csv'
 prices = pd.read_csv(prices_path)
@@ -194,11 +195,13 @@ def return_calc(prices_df, method="DISCRETE", date_column="Date"):
 
 # Compute arithmetic returns
 arithmetic_returns = return_calc(prices, method='DISCRETE', date_column='Date')
+dates = arithmetic_returns.iloc[:, 0] # if needed
 
 # Assume expected return is zero
-arithmetic_returns = arithmetic_returns[:, 1:] - arithmetic_returns[:, 1:].mean()
-dates = arithmetic_returns.iloc[:, 0]
-arithmetic_returns = pd.concat([dates, arithmetic_returns], axis=1)
+arithmetic_returns = arithmetic_returns.iloc[:, 1:] # remove dates
+arithmetic_returns = arithmetic_returns - arithmetic_returns.mean()
+
+# arithmetic_returns = pd.concat([dates, arithmetic_returns], axis=1)
 
 
 # Fit models
@@ -336,4 +339,37 @@ total_holdings_A = holdings_A['Holding'].sum()
 total_holdings_B = holdings_B['Holding'].sum()
 total_holdings_C = holdings_C['Holding'].sum()
 
-# VaR and ES for A
+# Using copula
+
+# (1) Construct the copula
+
+U = pd.DataFrame()  # construct U
+
+# Combine all fitted models from the three portfolios
+all_fitted_models = {**fitted_models_A, **fitted_models_B, **fitted_models_C}
+
+# Populate U with the standard normal transformed values
+for stock, model in all_fitted_models.items():
+    # Transform the CDF values to standard normal using the normal quantile function
+    U[stock] = norm.ppf(model.u)
+
+R = U.corr(method='spearman')  # compute Spearman correlation matrix
+
+
+def is_psd(A, tol=1e-8):
+    """
+    Returns true if A is a PSD matrix
+    :param: A: correlation matrix we want to confirm is PSD
+    :param: tol: tolerance to check value of eigenvalues against. If the eigenvalues are all greater than the negative of
+    the tolerance, we consider the correlation matrix PSD.
+    :returns: Boolean indicating whether A is a PSD matrix
+    """
+    eigenvalues = np.linalg.eigvalsh(A)
+    return np.all(eigenvalues > -tol)
+
+
+evals = R.values
+if is_psd(evals):
+    print('Corr Matrix is PSD')
+else:
+    print('Corr Matrix is NOT PSD')
