@@ -119,7 +119,10 @@ def ewCovar(x, lambda_):
     for i in range(m):
         weights[i] = (1 - lambda_) * lambda_ ** (m - i - 1)
 
+    # Step 3: Create a diagonal matrix from the normalized weights.
     weights_mat = np.diag(weights / sum(weights))
+
+    # Step 4: Calculate the weighted covariance matrix
     cov_matrix = np.transpose(x.values) @ weights_mat @ x.values
 
     return cov_matrix
@@ -678,7 +681,8 @@ def calculate_var_hist_KDE(returns, prices, stock, nsim, alpha):
 
 def VaR(a, alpha=0.05):
     """
-    Calculate the Value at Risk (VaR) for a given array of financial data.
+    Calculate the Value at Risk (VaR) for a given array of financial data. Used for Historic Simulation on a single
+    return series in Project_04.
 
     Parameters:
     :param: a (array-like): An array of historical financial data (e.g., returns or prices).

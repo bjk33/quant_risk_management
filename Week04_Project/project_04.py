@@ -205,7 +205,7 @@ var_hist_ret = var_hist / current_price
 print("Historical VaR with KDE at 95% confidence level:", var_hist_ret)
 
 
-# Alternative Historic Simulation (no KDE)
+# Alternative Historic Simulation (no KDE/no sampling)
 def VaR(a, alpha=0.05):
     x = np.sort(a)
     nup = int(np.ceil(len(a) * alpha))
