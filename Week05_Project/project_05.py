@@ -322,8 +322,8 @@ returns_A = returns_A.replace(0, epsilon)  # replace 0 with epsilon
 returns_B = returns_B.replace(0, epsilon)  # replace 0 with epsilon
 
 # Fit the models accordingly
-fitted_models_A = {stock: fit_general_t(returns_A[stock].dropna()) for stock in stocks_in_portfolio_A}
-fitted_models_B = {stock: fit_general_t(returns_B[stock].dropna()) for stock in stocks_in_portfolio_B}
+fitted_models_A = {stock: fit_general_t(returns_A[stock].dropna())[0] for stock in stocks_in_portfolio_A}
+fitted_models_B = {stock: fit_general_t(returns_B[stock].dropna())[0] for stock in stocks_in_portfolio_B}
 fitted_models_C = {stock: fit_normal(returns_C[stock].dropna()) for stock in stocks_in_portfolio_C}
 
 # Calculate VaR and ES of each portfolio
@@ -368,8 +368,100 @@ def is_psd(A, tol=1e-8):
     return np.all(eigenvalues > -tol)
 
 
-evals = R.values
-if is_psd(evals):
+if is_psd(R):
     print('Corr Matrix is PSD')
 else:
     print('Corr Matrix is NOT PSD')
+
+
+# Simulation
+
+def simulate_pca(a, nsim, pctExp=1, mean=None, seed=1234):
+    """
+    Simulate a multivariate normal distribution using PCA based on a covariance matrix and an optional percentage of
+    variance explained (indirectly the number of eigenvalues/principal components to include).
+    :param a: The input covariance matrix
+    :param nsim: Specifies the number of samples to simulate
+    :param pctExp: (optional) The percentage of total variance that should be explained by the principal components. The
+    default is 100%
+    :param mean: (optional) The mean vector of the covariance matrix. If not provided the default mean is zero
+    :param seed: (optional) The seed for random number generation to ensure reproducibility
+    :return: out: The matrix of simulated samples
+    """
+    n = a.shape[0]
+
+    if mean is None:
+        _mean = np.zeros(n)
+    else:
+        _mean = np.array(mean)
+
+    # Eigenvalue decomposition
+    vals, vecs = np.linalg.eigh(a)
+    vals = np.real(vals)
+    vecs = np.real(vecs)
+    # Sort values and vectors in descending order
+    idx = vals.argsort()[::-1]
+    vals = vals[idx]
+    vecs = vecs[:, idx]
+
+    tv = np.sum(vals)
+
+    posv = np.where(vals >= 1e-8)[0]
+    if pctExp < 1:
+        pct = 0.0
+        for i in posv:
+            pct += vals[i] / tv
+            if pct >= pctExp:
+                posv = posv[:np.where(posv == i)[0][0] + 1]
+                break
+    vals = vals[posv]
+    vecs = vecs[:, posv]
+
+    # Construct B matrix
+    B = vecs @ np.diag(np.sqrt(vals))
+
+    # Generate random samples
+    np.random.seed(seed)
+    r = np.random.randn(vals.shape[0], nsim)
+    print(B.shape, r.shape)
+    out = (B @ r).T
+
+    # Add the mean
+    for i in range(n):
+        out[:, i] += _mean[i]
+
+    return out
+
+
+nsim = 5000
+# Step 1: Simulate standard normals
+standard_normals = simulate_pca(R, nsim)
+
+# Step 2: Convert Standard Normals to Uniforms
+simU = pd.DataFrame(norm.cdf(standard_normals), columns=all_fitted_models.keys())
+
+# Step 3: Transform Uniforms to Simulated Returns
+simulatedReturns = pd.DataFrame()
+
+for stock, model in all_fitted_models.items():
+    simulatedReturns[stock] = model.eval_func(simU[stock])
+
+# Portfolio Valuation
+
+# Create DataFrame for iterations
+iterations_df = pd.DataFrame({'iteration': range(0, nsim)})
+
+# Cross-join portfolio with iterations
+# This creates a row for each stock-iteration combination
+values = portfolio.assign(key=1).merge(iterations_df.assign(key=1), on='key').drop('key', axis=1)
+
+# Extracting the current prices
+current_prices = prices.iloc[-1].drop('Date')  # Assuming the first column is 'Date'
+
+# Calculate current value, simulated value and PnL for each stock-iteration combination
+values['currentValue'] = values.apply(lambda row: row['Holding'] * current_prices[row['Stock']], axis=1)
+values['simulatedValue'] = (values.apply
+                            (lambda row: row['Holding'] * current_prices[row['Stock']] *
+                                         (1.0 + simulatedReturns.loc[row['iteration'], row['Stock']]), axis=1))
+values['pnl'] = values['simulatedValue'] - values['currentValue']
+
