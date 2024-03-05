@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-from scipy.stats import norm, t
-from scipy.special import gamma
+from scipy.stats import norm, t, kurtosis
+from scipy.optimize import minimize
 
 # Problem 2 #
 
@@ -12,6 +12,7 @@ returns = pd.read_csv(returns_path)
 
 # Mean Center
 returns = returns - returns.mean()
+
 
 # A) Normal distribution with exponentially weighted variance (lambda = 0.97)
 
@@ -65,6 +66,7 @@ var, es = calculate_var_es_ew_normal(returns, lambda_=0.97, alpha=0.05)
 
 print("Series VaR - Normal EW Variance:", var)
 print("Series ES - Normal EW Variance:", es)
+
 
 # B) Using an MLE fitted Student's t-distribution
 
@@ -125,7 +127,6 @@ def calculate_historic_var_es(returns_df, alpha):
 var_hist, es_hist = calculate_historic_var_es(returns, alpha=0.05)
 print("Series VaR - Historic Simulation:", var_hist)
 print("Series ES - Historic Simulation:", es_hist)
-
 
 # Problem 3 #
 
@@ -191,11 +192,148 @@ def return_calc(prices_df, method="DISCRETE", date_column="Date"):
     return out
 
 
+# Compute arithmetic returns
 arithmetic_returns = return_calc(prices, method='DISCRETE', date_column='Date')
+
+# Assume expected return is zero
 arithmetic_returns = arithmetic_returns[:, 1:] - arithmetic_returns[:, 1:].mean()
 dates = arithmetic_returns.iloc[:, 0]
 arithmetic_returns = pd.concat([dates, arithmetic_returns], axis=1)
 
+
 # Fit models
 
-# Generalized T for portfolios A and B
+# First define fitted model structure in form of a class
+
+class FittedModel:
+    def __init__(self, beta, error_model, eval_func, errors, u):
+        self.beta = beta
+        self.error_model = error_model
+        self.eval_func = eval_func
+        self.errors = errors
+        self.u = u
+
+
+# Create functions for fitting models
+
+# General t sum ll function
+def general_t_ll(mu, s, nu, x):
+    """
+        Calculate the sum of the logarithms of the probability density function (pdf)
+        values of a scaled and shifted t-distribution for a given set of data points.
+
+        Parameters:
+        :param: mu (float): The location parameter (mean) of the t-distribution.
+        :param: s (float): The scale (sigma) factor applied to the t-distribution.
+        :param: nu (int): The degrees of freedom for the t-distribution.
+        :param: x (array-like): An array or list of data points to evaluate the t-distribution.
+
+        Returns:
+        :return: log_sum (float): The sum of the logarithms of the pdf values for the data points in 'x'.
+        """
+    # Scale and shift the t-distribution
+    scaled_pdf = lambda x_val: t.pdf((x_val - mu) / s, nu) / s
+    # Apply the scaled pdf to each element in x and sum their logs
+    log_sum = np.sum(np.log(scaled_pdf(x)))
+    return log_sum
+
+
+def fit_general_t(x):
+    # Approximate values based on moments
+    start_m = np.mean(x)
+    start_nu = 6.0 / kurtosis(x, fisher=False) + 4
+    start_s = np.sqrt(np.var(x) * (start_nu - 2) / start_nu)
+
+    # Objective function to maximize (log-likelihood)
+    def objective(mu, s, nu):
+        return -general_t_ll(mu, s, nu, x)  # Negated for minimization
+
+    # Initial parameters
+    initial_params = [start_m, start_s, start_nu]
+
+    # Bounds for s and nu
+    bounds = [(None, None), (1e-6, None), (2.0001, None)]
+
+    # Optimization
+    result = minimize(lambda params: objective(*params), initial_params, bounds=bounds)
+
+    m, s, nu = result.x
+    error_model = lambda val: t.pdf(val, nu, loc=m, scale=s)
+    errors = x - m
+    u = t.cdf(x, nu, loc=m, scale=s)
+
+    # Quantile function
+    def eval(u_val):
+        return t.ppf(u_val, nu, loc=m, scale=s)
+
+    # Return fitted model and parameters
+    fitted_model = FittedModel(None, error_model, eval, errors, u)
+    return fitted_model, (m, s, nu, error_model)
+
+# Access
+# fitted_model_instance, params_and_dist = fit_general_t(data)
+# Access elements of the FittedModel
+# error_model = fitted_model_instance.error_model
+# errors = fitted_model_instance.errors
+
+# Access the parameters and the distribution object
+# m, s, nu, distribution_func = params_and_dist
+
+
+def fit_normal(x):
+    # Calculate mean and standard deviation
+    m = np.mean(x)
+    s = np.std(x)
+
+    # Create the error model based on the normal distribution
+    error_model = lambda val: norm.pdf(val, m, s)
+
+    # Calculate errors and CDF values
+    errors = x - m
+    u = norm.cdf(x, m, s)
+
+    # Function to evaluate the quantile
+    def eval(u_val):
+        return norm.ppf(u_val, m, s)
+
+    # Return the FittedModel object
+    return FittedModel(None, error_model, eval, errors, u)
+
+
+# Generalized T for portfolios A and B, normal for C
+
+# First find the stocks in portfolios A and B respectively
+stocks_in_portfolio_A = portfolio[portfolio['Portfolio'] == 'A']['Stock'].tolist()
+stocks_in_portfolio_B = portfolio[portfolio['Portfolio'] == 'B']['Stock'].tolist()
+stocks_in_portfolio_C = portfolio[portfolio['Portfolio'] == 'C']['Stock'].tolist()
+
+
+# Next we want to extract returns data for each stock
+returns_A = arithmetic_returns[stocks_in_portfolio_A]  # for A
+returns_B = arithmetic_returns[stocks_in_portfolio_B]  # for B
+returns_C = arithmetic_returns[stocks_in_portfolio_C]  # for C
+
+# Method for handling 0 encounters in returns data
+epsilon = 1e-10  # define a very small epsilon that shouldn't change our fitted model
+returns_A = returns_A.replace(0, epsilon)  # replace 0 with epsilon
+returns_B = returns_B.replace(0, epsilon)  # replace 0 with epsilon
+
+# Fit the models accordingly
+fitted_models_A = {stock: fit_general_t(returns_A[stock].dropna()) for stock in stocks_in_portfolio_A}
+fitted_models_B = {stock: fit_general_t(returns_B[stock].dropna()) for stock in stocks_in_portfolio_B}
+fitted_models_C = {stock: fit_normal(returns_C[stock].dropna()) for stock in stocks_in_portfolio_C}
+
+# Calculate VaR and ES of each portfolio
+alpha = 0.05
+
+# Extracting holdings
+holdings_A = portfolio[portfolio['Portfolio'] == 'A'][['Stock', 'Holding']]
+holdings_B = portfolio[portfolio['Portfolio'] == 'B'][['Stock', 'Holding']]
+holdings_C = portfolio[portfolio['Portfolio'] == 'C'][['Stock', 'Holding']]
+
+# Compute total holdings for weight normalization
+total_holdings_A = holdings_A['Holding'].sum()
+total_holdings_B = holdings_B['Holding'].sum()
+total_holdings_C = holdings_C['Holding'].sum()
+
+# VaR and ES for A
