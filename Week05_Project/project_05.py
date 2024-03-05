@@ -10,6 +10,9 @@ from scipy.special import gamma
 returns_path = '/Users/brandonkaplan/Desktop/FINTECH545/Week05_Project/problem1.csv'
 returns = pd.read_csv(returns_path)
 
+# Mean Center
+returns = returns - returns.mean()
+
 # A) Normal distribution with exponentially weighted variance (lambda = 0.97)
 
 
@@ -122,3 +125,77 @@ def calculate_historic_var_es(returns_df, alpha):
 var_hist, es_hist = calculate_historic_var_es(returns, alpha=0.05)
 print("Series VaR - Historic Simulation:", var_hist)
 print("Series ES - Historic Simulation:", es_hist)
+
+
+# Problem 3 #
+
+# Portfolio VaR and ES
+prices_path = '/Users/brandonkaplan/Desktop/FINTECH545/Week05_Project/DailyPrices.csv'
+portfolio_path = '/Users/brandonkaplan/Desktop/FINTECH545/Week05_Project/portfolio.csv'
+prices = pd.read_csv(prices_path)
+portfolio = pd.read_csv(portfolio_path)
+
+
+def return_calc(prices_df, method="DISCRETE", date_column="Date"):
+    """
+    This function calculate returns for financial data in a DataFrame.
+
+    Parameters:
+    :param: prices (DataFrame): DataFrame containing price data and a date column.
+    :param: method (str, optional): Method for calculating returns. Options are "DISCRETE" or "LOG". Default is
+    "DISCRETE". "DISCRETE" relies on calculating returns using arithmetic returns and "LOG" relies on calculating
+    returns using geometric returns
+    :param:date_column (str, optional): Column name for dates in the DataFrame. Default is "Date".
+
+    Returns:
+    :return: out: DataFrame: A new DataFrame with the calculated returns and corresponding dates.
+
+    Raises:
+    ValueError: If the date column is not found in the DataFrame.
+    ValueError: If the method is not recognized.
+    """
+
+    # Check if the date column is in the DataFrame
+    if date_column not in prices.columns:
+        raise ValueError(f"dateColumn: {date_column} not in DataFrame.")
+
+    # Selecting columns except the date column
+    assets = [col for col in prices.columns if col != date_column]
+
+    # Convert prices to a numpy matrix for calculations
+    p = prices[assets].values
+
+    # Calculating the price ratios
+    p2 = p[1:] / p[:-1]
+
+    # Applying the selected return calculation method
+    if method.upper() == "DISCRETE":
+        p2 = p2 - 1
+    elif method.upper() == "LOG":
+        p2 = np.log(p2)
+    else:
+        raise ValueError(f"method: {method} must be in (\"LOG\", \"DISCRETE\")")
+
+    # Aligning the dates with the returns
+
+    dates = prices[date_column].iloc[1:]
+
+    # Creating a DataFrame from the returns
+
+    returns_df = pd.DataFrame(p2, columns=assets, index=dates.index)
+
+    # Merging the returns with the dates
+
+    out = pd.concat([prices[date_column], returns_df], axis=1).dropna()
+
+    return out
+
+
+arithmetic_returns = return_calc(prices, method='DISCRETE', date_column='Date')
+arithmetic_returns = arithmetic_returns[:, 1:] - arithmetic_returns[:, 1:].mean()
+dates = arithmetic_returns.iloc[:, 0]
+arithmetic_returns = pd.concat([dates, arithmetic_returns], axis=1)
+
+# Fit models
+
+# Generalized T for portfolios A and B

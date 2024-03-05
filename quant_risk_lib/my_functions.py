@@ -472,7 +472,7 @@ def simulate_pca(a, nsim, pctExp=1, mean=None, seed=1234):
 # (4) VaR calculation
 
 
-def return_calc(prices, method="DISCRETE", date_column="Date"):
+def return_calc(prices_df, method="DISCRETE", date_column="Date"):
     """
     This function calculate returns for financial data in a DataFrame.
 
@@ -492,14 +492,14 @@ def return_calc(prices, method="DISCRETE", date_column="Date"):
     """
 
     # Check if the date column is in the DataFrame
-    if date_column not in prices.columns:
+    if date_column not in prices_df.columns:
         raise ValueError(f"dateColumn: {date_column} not in DataFrame.")
 
     # Selecting columns except the date column
-    assets = [col for col in prices.columns if col != date_column]
+    assets = [col for col in prices_df.columns if col != date_column]
 
     # Convert prices to a numpy matrix for calculations
-    p = prices[assets].values
+    p = prices_df[assets].values
 
     # Calculating the price ratios
     p2 = p[1:] / p[:-1]
@@ -514,7 +514,7 @@ def return_calc(prices, method="DISCRETE", date_column="Date"):
 
     # Aligning the dates with the returns
 
-    dates = prices[date_column].iloc[1:]
+    dates = prices_df[date_column].iloc[1:]
 
     # Creating a DataFrame from the returns
 
@@ -522,7 +522,7 @@ def return_calc(prices, method="DISCRETE", date_column="Date"):
 
     # Merging the returns with the dates
 
-    out = pd.concat([prices[date_column], returns_df], axis=1).dropna()
+    out = pd.concat([prices_df[date_column], returns_df], axis=1).dropna()
 
     return out
 
