@@ -1,0 +1,10 @@
+README.md
+setup.py
+quant_risk_lib/__init__.py
+quant_risk_lib/my_functions.py
+quant_risk_lib.egg-info/PKG-INFO
+quant_risk_lib.egg-info/SOURCES.txt
+quant_risk_lib.egg-info/dependency_links.txt
+quant_risk_lib.egg-info/requires.txt
+quant_risk_lib.egg-info/top_level.txt
+tests/test_my_functions.py

@@ -1,0 +1,10 @@
+Metadata-Version: 2.1
+Name: quant_risk_lib
+Version: 0.1.0
+Summary: My FINTECH545 Python library
+Author: Brandon Kaplan
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: scipy
+Requires-Dist: matplotlib
+Requires-Dist: statsmodels
