@@ -462,6 +462,118 @@ current_prices = prices.iloc[-1].drop('Date')  # Assuming the first column is 'D
 values['currentValue'] = values.apply(lambda row: row['Holding'] * current_prices[row['Stock']], axis=1)
 values['simulatedValue'] = (values.apply
                             (lambda row: row['Holding'] * current_prices[row['Stock']] *
-                                         (1.0 + simulatedReturns.loc[row['iteration'], row['Stock']]), axis=1))
+                                (1.0 + simulatedReturns.loc[row['iteration'], row['Stock']]), axis=1))
 values['pnl'] = values['simulatedValue'] - values['currentValue']
 
+
+# Calculation of Risk Metrics
+def VaR(a, alpha=0.05):
+    x = np.sort(a)
+    nup = int(np.ceil(len(a) * alpha))
+    ndn = int(np.floor(len(a) * alpha))
+    v = 0.5 * (x[nup] + x[ndn])
+
+    return -v
+
+
+def ES(a, alpha=0.05):
+    x = np.sort(a)
+    nup = int(np.ceil(len(a) * alpha))
+    ndn = int(np.floor(len(a) * alpha))
+    v = 0.5 * (x[nup] + x[ndn])
+    es = np.mean(x[x<=v])
+    return -es
+
+
+# Stock Level
+
+# Group the values DataFrame by 'Stock'
+grouped = values.groupby('Stock')
+
+# Calculation of Risk Metrics for each stock
+stockRisk = grouped.agg(
+    currentValue=('currentValue', lambda x: x.iloc[0]),
+    VaR95=('pnl', lambda x: VaR(x, alpha=0.05)),
+    ES95=('pnl', lambda x: ES(x, alpha=0.05)),
+    # VaR99=('pnl', lambda x: VaR(x, alpha=0.01)),
+    # ES99=('pnl', lambda x: ES(x, alpha=0.01)),
+    Standard_Dev=('pnl', np.std),
+    min=('pnl', 'min'),
+    max=('pnl', 'max'),
+    mean=('pnl', 'mean')
+)
+
+# Portfolio Level
+# All stocks
+
+# Group by iteration
+grouped_by_iteration = values.groupby('iteration')
+
+# Aggregate totals per simulation iteration
+total_values = grouped_by_iteration.agg(
+    currentValue=('currentValue', 'sum'),
+    simulatedValue=('simulatedValue', 'sum'),
+    pnl=('pnl', 'sum')
+)
+
+
+# Function to filter and aggregate values for a specific portfolio
+def aggregate_portfolio_values(values, holdings):
+    # Filter 'values' to include only stocks in the specific portfolio
+    portfolio_values = values[values['Stock'].isin(holdings['Stock'])]
+
+    # Group by 'iteration' and aggregate
+    grouped = portfolio_values.groupby('iteration')
+    total_values = grouped.agg(
+        currentValue=('currentValue', 'sum'),
+        simulatedValue=('simulatedValue', 'sum'),
+        pnl=('pnl', 'sum')
+    )
+    return total_values
+
+
+# Calculate total values for each portfolio
+total_values_A = aggregate_portfolio_values(values, holdings_A)
+total_values_B = aggregate_portfolio_values(values, holdings_B)
+total_values_C = aggregate_portfolio_values(values, holdings_C)
+
+
+def calculate_total_risk(total_values):
+    total_risk = {
+        'currentValue': total_values['currentValue'].iloc[0],
+        'VaR95': VaR(total_values['pnl'], alpha=0.05),
+        'ES95': ES(total_values['pnl'], alpha=0.05),
+        # 'VaR99': VaR(total_values['pnl'], alpha=0.01),
+        # 'ES99': ES(total_values['pnl'], alpha=0.01),
+        'Standard_Dev': np.std(total_values['pnl']),
+        'min': np.min(total_values['pnl']),
+        'max': np.max(total_values['pnl']),
+        'mean': np.mean(total_values['pnl'])
+    }
+    return total_risk
+
+
+# Calculate the total risk for each portfolio
+total_risk_A = calculate_total_risk(total_values_A)
+total_risk_B = calculate_total_risk(total_values_B)
+total_risk_C = calculate_total_risk(total_values_C)
+totalRisk = calculate_total_risk(total_values)
+
+# Convert risk dictionaries to DataFrames
+totalRisk_df = pd.DataFrame([totalRisk])
+totalRisk_df['portfolio'] = 'Total'
+
+total_risk_A_df = pd.DataFrame([total_risk_A])
+total_risk_A_df['portfolio'] = 'A'
+
+total_risk_B_df = pd.DataFrame([total_risk_B])
+total_risk_B_df['portfolio'] = 'B'
+
+total_risk_C_df = pd.DataFrame([total_risk_C])
+total_risk_C_df['portfolio'] = 'C'
+
+# Concatenate the DataFrames
+riskOut = pd.concat([stockRisk, totalRisk_df, total_risk_A_df, total_risk_B_df, total_risk_C_df])
+# Change the index for the last four rows
+new_indices = list(riskOut.index[:-4]) + ['Total', 'A', 'B', 'C']
+riskOut.index = new_indices
