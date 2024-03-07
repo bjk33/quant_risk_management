@@ -71,4 +71,4 @@ print(check22)
 
 # 2.3 EW Covar with EW Var (lambda = 0.97) and EW Correlation (lambda = 0.94)
 cout_23 = my_functions.ewCovar(x2, lambda_=0.97)
-sd
+
