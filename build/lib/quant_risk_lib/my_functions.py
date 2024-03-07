@@ -455,7 +455,7 @@ def simulate_normal(N, cov, mean=None, seed=1234, fix_method=near_psd):
     out = np.random.normal(0.0, 1.0, size=(n, N))
 
     # Apply the Cholesky root and transpose
-    out = np.dot(l, out).T
+    out = np.dot(l, out)
 
     # Add the mean to each column
     for i in range(n):
