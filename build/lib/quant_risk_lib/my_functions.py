@@ -102,6 +102,39 @@ def calculate_log_likelihood_t(df, sigma, residuals):
 # (1) Covariance estimation techniques
 
 
+def missing_cov(x, skip_miss=True, fun=np.cov):
+    n, m = x.shape
+    n_miss = x.isnull().sum(axis=0)
+
+    # nothing missing, just calculate it
+    if n_miss.sum() == 0:
+        return fun(x, rowvar=False)
+
+    idx_missing = [set(x.index[x[col].isnull()]) for col in x.columns]
+
+    if skip_miss:
+        # Skipping Missing, get all the rows which have values and calculate the covariance
+        rows = set(range(n))
+        for c in range(m):
+            rows -= idx_missing[c]
+        rows = sorted(rows)
+        return fun(x.iloc[rows, :], rowvar=False)
+    else:
+        # Pairwise, for each cell, calculate the covariance
+        out = np.empty((m, m))
+        for i in range(m):
+            for j in range(i + 1):
+                rows = set(range(n))
+                for c in (i, j):
+                    rows -= idx_missing[c]
+                rows = sorted(rows)
+                sub_matrix = fun(x.iloc[rows, [i, j]], rowvar=False)
+                out[i, j] = sub_matrix[0, 1]
+                if i != j:
+                    out[j, i] = out[i, j]
+        return out
+
+
 def ewCovar(x, lambda_):
     """Routine for computing exponentially weighted covariance matrix of a dataframe.
     :param x: a pandas dataframe
