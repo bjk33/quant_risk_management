@@ -131,3 +131,59 @@ check34 = np.linalg.norm(check34)
 print(check34)
 
 # Test 4 - Cholesky Factorization #
+cin4_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout_3.1.csv'
+cin4 = pd.read_csv(cin4_path)
+out4_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout_4.1.csv'
+out_4 = pd.read_csv(out4_path)
+
+out_4 = out_4.to_numpy()
+cin4 = cin4.to_numpy()
+n, m = cin4.shape
+cout_4 = np.zeros((n, m))
+my_functions.chol_psd(cout_4, cin4)
+check4 = cout_4 - out_4
+check4 = np.linalg.norm(check4)
+print(check4)
+
+# Test 5 - Normal Simulation #
+
+cin51_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test5_1.csv'
+cin52_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test5_2.csv'
+cin53_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test5_3.csv'
+cin54_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test5_3.csv'
+cin55_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test5_2.csv'
+
+cin51 = pd.read_csv(cin51_path)
+cin52 = pd.read_csv(cin52_path)
+cin53 = pd.read_csv(cin53_path)
+cin54 = pd.read_csv(cin54_path)
+
+out51_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout_5.1.csv'
+out52_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout_5.2.csv'
+out53_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout_5.3.csv'
+out54_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout_5.4.csv'
+out55_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout_5.5.csv'
+
+out_51 = pd.read_csv(out51_path)
+out_52 = pd.read_csv(out52_path)
+out_53 = pd.read_csv(out53_path)
+out_54 = pd.read_csv(out54_path)
+out_55 = pd.read_csv(out55_path)
+
+# 5.1 PD input
+out_51 = out_51.to_numpy()
+cin51 = cin51.to_numpy()
+cout_51 = np.cov(my_functions.simulate_normal(100000, cin51))
+check51 = cout_51 - out_51
+check51 = np.linalg.norm(check51)
+print(check51)
+
+# 5.2 PSD Input
+out_52 = out_52.to_numpy()
+cin52 = cin52.to_numpy()
+cout_52 = np.cov(my_functions.simulate_normal(100000, cin52))
+check52 = cout_52 - out_52
+check52 = np.linalg.norm(check52)
+print(check52)
+
+# 5.3

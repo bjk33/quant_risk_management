@@ -356,7 +356,15 @@ def higham_nearestPSD(pc, W=None, epsilon=1e-9, maxIter=100, tol=1e-9):
         W = np.diag(np.ones(n))
 
     deltaS = 0
+    invSD = None
     Yk = pc.copy()
+
+    if not np.allclose(np.diag(Yk), 1.0):
+        invSD = np.diag(1.0 / np.sqrt(np.diag(Yk)))
+        out = invSD @ Yk @ invSD
+
+    Yo = Yk.copy()
+
     norml = np.finfo(np.float64).max
     i = 1
 
@@ -365,7 +373,7 @@ def higham_nearestPSD(pc, W=None, epsilon=1e-9, maxIter=100, tol=1e-9):
         Xk = _getPS(Rk, W)
         deltaS = Xk - Rk
         Yk = _getPu(Xk, W)
-        norm = wgtNorm(Yk - pc, W)
+        norm = wgtNorm(Yk - Yo, W)
         minEigVal = np.min(np.real(np.linalg.eigvals(Yk)))
 
         if abs(norm - norml) < tol and minEigVal > -epsilon:
@@ -377,6 +385,11 @@ def higham_nearestPSD(pc, W=None, epsilon=1e-9, maxIter=100, tol=1e-9):
         print(f"Converged in {i} iterations.")
     else:
         print("Convergence failed after {} iterations".format(i - 1))
+
+    if invSD is not None:
+        invSD = np.diag(1 / np.diag(invSD))
+        Yk = invSD @ Yk @ invSD
+
     return Yk
 
 
@@ -399,7 +412,7 @@ def is_psd(A, tol=1e-9):
 # Directly from covariance matrix
 
 
-def simulate_normal(N, cov, mean=None, seed=1234):
+def simulate_normal(N, cov, mean=None, seed=1234, fix_method=near_psd()):
     """
     Simulate a  multivariate normal distribution directly from a covariance matrix. We use chol_psd() to Cholesky
     factorize an input covariance matrix. This is used to transform standard normal variables into variables with the
@@ -408,7 +421,9 @@ def simulate_normal(N, cov, mean=None, seed=1234):
     :param cov: The covariance matrix based on which the multivariate normal samples are generated
     :param mean: An optional mean vector to use. If not provided the mean is zero
     :param seed: An optional seed to use for the random number generation in order to ensure reproducibility
-    :return: out.T: The matrix of generated samples
+    :param fix_method: def: A fallback to near_psd() to approximate nearest PSD in case that covariance matrix is
+    neither PD nor PSD
+    :return: out: The matrix of generated samples
     """
     n, m = cov.shape
     if n != m:
@@ -420,29 +435,32 @@ def simulate_normal(N, cov, mean=None, seed=1234):
         raise ValueError(f"Mean ({len(mean)}) is not the size of cov ({n},{n})")
 
     # Cholesky Decomposition
-
+    l = np.zeros_like(cov)  # Initialize l for modification in chol_psd
     # Attempt standard Cholesky decomposition
     try:
-        l = np.linalg.cholesky(cov).T  # NumPy returns upper triangular
+        l = np.linalg.cholesky(cov)  # NumPy returns upper triangular
     except np.linalg.LinAlgError:  # If not PD check PSD and then use chol_psd()
-        if not is_psd(cov):
-            raise ValueError("Covariance matrix is not positive semi-definite.")
-        else:
-            l = np.zeros_like(cov)
-            chol_psd(l, cov)
+        try:
+            chol_psd(l, cov)  # Try chol_psd with the original covariance matrix
+        except ValueError:  # If chol_psd fails, matrix is not positive semi-definite
+            fixed_cov = fix_method(cov)  # Use fix_method to approximate a PSD matrix
+            chol_psd(l, fixed_cov)  # Retry chol_psd with the fixed covariance matrix
 
+    # Initialize out matrix
+    out = np.zeros((n, N))
     # Generate random standard normals
     np.random.seed(seed)
-    d = stats.norm.rvs(size=(n, N))
+    out = np.random.normal(0.0, 1.0, size=(n, N))
 
-    # Multiply generated standard normal variables by the Cholesky factor to get variables with desired covariance
-    out = np.dot(l, d)
+    # Apply the Cholesky root and transpose
+    out = np.dot(l, out).T
 
-    # Add the mean
+    # Add the mean to each column
     for i in range(n):
-        out[i, :] += mean[i]
+        out[:, i] += mean[i]
 
-    return out.T
+    return out
+
 
 # Simulate from PCA
 
