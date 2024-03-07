@@ -187,3 +187,9 @@ check52 = np.linalg.norm(check52)
 print(check52)
 
 # 5.3
+out_53 = out_53.to_numpy()
+cin53 = cin53.to_numpy()
+cout_53 = np.cov(my_functions.simulate_normal(100000, cin53, fix_method=my_functions.near_psd()))
+check53 = cout_53 - out_53
+check53 = np.linalg.norm(check53)
+print(check53)
