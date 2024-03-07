@@ -223,7 +223,7 @@ def chol_psd(root, a):
 
         # Diagonal element
         temp = a[j, j] - s
-        if 0 >= temp >= -1e-6:
+        if 0 >= temp >= -1e-5:
             temp = 0.0
         root[j, j] = np.sqrt(temp)
 
