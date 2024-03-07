@@ -223,8 +223,11 @@ def chol_psd(root, a):
 
         # Diagonal element
         temp = a[j, j] - s
-        if 0 >= temp >= -1e-5:
+        if 0 >= temp >= -1e-8:
             temp = 0.0
+        if temp < 0:
+            # Temp is negative, should trigger fix_method instead of proceeding
+            raise ValueError("Matrix not PSD, requires adjustment.")
         root[j, j] = np.sqrt(temp)
 
         # Check for the 0 eigenvalue. Just set the column to 0 if we have one.
