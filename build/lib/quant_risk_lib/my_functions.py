@@ -359,6 +359,7 @@ def higham_nearestPSD(pc, W=None, epsilon=1e-9, maxIter=100, tol=1e-9):
     invSD = None
     Yk = pc.copy()
 
+    # Calculate the correlation matrix if we got a covariance
     if not np.allclose(np.diag(Yk), 1.0):
         invSD = np.diag(1.0 / np.sqrt(np.diag(Yk)))
         out = invSD @ Yk @ invSD
@@ -386,6 +387,7 @@ def higham_nearestPSD(pc, W=None, epsilon=1e-9, maxIter=100, tol=1e-9):
     else:
         print("Convergence failed after {} iterations".format(i - 1))
 
+    # Add back the variance
     if invSD is not None:
         invSD = np.diag(1 / np.diag(invSD))
         Yk = invSD @ Yk @ invSD
@@ -412,7 +414,7 @@ def is_psd(A, tol=1e-9):
 # Directly from covariance matrix
 
 
-def simulate_normal(N, cov, mean=None, seed=1234, fix_method=near_psd()):
+def simulate_normal(N, cov, mean=None, seed=1234, fix_method=near_psd):
     """
     Simulate a  multivariate normal distribution directly from a covariance matrix. We use chol_psd() to Cholesky
     factorize an input covariance matrix. This is used to transform standard normal variables into variables with the
@@ -421,8 +423,8 @@ def simulate_normal(N, cov, mean=None, seed=1234, fix_method=near_psd()):
     :param cov: The covariance matrix based on which the multivariate normal samples are generated
     :param mean: An optional mean vector to use. If not provided the mean is zero
     :param seed: An optional seed to use for the random number generation in order to ensure reproducibility
-    :param fix_method: def: A fallback to near_psd() to approximate nearest PSD in case that covariance matrix is
-    neither PD nor PSD
+    :param fix_method: def: A fallback to approximate nearest PSD in case that covariance matrix is
+    neither PD nor PSD. Default is near_psd().
     :return: out: The matrix of generated samples
     """
     n, m = cov.shape
