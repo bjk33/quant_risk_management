@@ -414,7 +414,7 @@ def is_psd(A, tol=1e-9):
 # Directly from covariance matrix
 
 
-def simulate_normal(N, cov, mean=None, seed=1234, fix_method=near_psd()):
+def simulate_normal(N, cov, mean=None, seed=1234, fix_method=near_psd):
     """
     Simulate a  multivariate normal distribution directly from a covariance matrix. We use chol_psd() to Cholesky
     factorize an input covariance matrix. This is used to transform standard normal variables into variables with the

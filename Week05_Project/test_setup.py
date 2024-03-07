@@ -157,6 +157,7 @@ cin51 = pd.read_csv(cin51_path)
 cin52 = pd.read_csv(cin52_path)
 cin53 = pd.read_csv(cin53_path)
 cin54 = pd.read_csv(cin54_path)
+cin55 = pd.read_csv(cin55_path)
 
 out51_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout_5.1.csv'
 out52_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout_5.2.csv'
@@ -173,7 +174,7 @@ out_55 = pd.read_csv(out55_path)
 # 5.1 PD input
 out_51 = out_51.to_numpy()
 cin51 = cin51.to_numpy()
-cout_51 = np.cov(my_functions.simulate_normal(100000, cin51))
+cout_51 = np.cov(my_functions.simulate_normal(1000, cin51))
 check51 = cout_51 - out_51
 check51 = np.linalg.norm(check51)
 print(check51)
@@ -186,10 +187,26 @@ check52 = cout_52 - out_52
 check52 = np.linalg.norm(check52)
 print(check52)
 
-# 5.3
+# 5.3 nonPSD input -- near_psd() fix
 out_53 = out_53.to_numpy()
 cin53 = cin53.to_numpy()
-cout_53 = np.cov(my_functions.simulate_normal(100000, cin53, fix_method=my_functions.near_psd()))
+cout_53 = np.cov(my_functions.simulate_normal(100000, cin53, fix_method=my_functions.near_psd))
 check53 = cout_53 - out_53
 check53 = np.linalg.norm(check53)
 print(check53)
+
+# 5.4 nonPSD input -- higham_nearestPSD() fix
+out_54 = out_54.to_numpy()
+cin54 = cin54.to_numpy()
+cout_54 = np.cov(my_functions.simulate_normal(100000, cin54, fix_method=my_functions.higham_nearestPSD()))
+check54 = cout_54 - out_54
+check54 = np.linalg.norm(check54)
+print(check54)
+
+# 5.5 PSD input - PCA simulation
+out_55 = out_55.to_numpy()
+cin55 = cin55.to_numpy()
+cout_55 = np.cov(my_functions.simulate_pca(cin55, 100000, pctExp=0.99))
+check55 = cout_55 - out_55
+check55 = np.linalg.norm(check55)
+print(check55)
