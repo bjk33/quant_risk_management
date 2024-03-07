@@ -174,7 +174,7 @@ out_55 = pd.read_csv(out55_path)
 # 5.1 PD input
 out_51 = out_51.to_numpy()
 cin51 = cin51.to_numpy()
-cout_51 = np.cov(my_functions.simulate_normal(1000, cin51))
+cout_51 = np.cov(my_functions.simulate_normal(100000, cin51))
 check51 = cout_51 - out_51
 check51 = np.linalg.norm(check51)
 print(check51)
