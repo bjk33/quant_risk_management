@@ -299,3 +299,50 @@ out_73 = out_73.to_numpy()
 check73 = cout_73 - out_73
 check73 = np.linalg.norm(check73)
 print(check73)
+
+# Test 8 - VaR and ES
+
+cin81_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test7_1.csv'
+cin82_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test7_2.csv'
+cin83_path = cin82_path
+cin84_path = cin81_path
+cin85_path = cin82_path
+cin86_path = cin82_path
+
+cin81 = pd.read_csv(cin81_path)
+cin82 = pd.read_csv(cin82_path)
+cin83 = pd.read_csv(cin83_path)
+cin84 = pd.read_csv(cin84_path)
+cin85 = pd.read_csv(cin85_path)
+cin86 = pd.read_csv(cin86_path)
+
+out81_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout8_1.csv'
+out82_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout8_2.csv'
+out83_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout8_3.csv'
+out84_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout8_4.csv'
+out85_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout8_5.csv'
+out86_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout8_6.csv'
+
+out_81 = pd.read_csv(out81_path)
+out_82 = pd.read_csv(out82_path)
+out_83 = pd.read_csv(out83_path)
+out_84 = pd.read_csv(out84_path)
+out_85 = pd.read_csv(out85_path)
+out_86 = pd.read_csv(out86_path)
+
+alpha = 0.05
+
+# 8.1 VaR Normal
+cin81 = cin81.to_numpy()
+fd_81, params_81 = my_functions.fit_normal(cin81)
+sigma_81 = params_81[2]
+mu_81 = params_81[1]
+var_abs_81 = -norm.ppf(alpha, mu_81, sigma_81)
+var_diff_81 = -norm.ppf(alpha, 0, sigma_81)
+cout_81 = np.array([var_abs_81, var_diff_81])
+out_81 = out_81.to_numpy()
+check81 = cout_81 - out_81
+check81 = np.linalg.norm(check81)
+print(check81)
+
+# 8.2 VaR TDist
