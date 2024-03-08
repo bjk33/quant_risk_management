@@ -198,7 +198,7 @@ print(check53)
 # 5.4 nonPSD input -- higham_nearestPSD() fix
 out_54 = out_54.to_numpy()
 cin54 = cin54.to_numpy()
-cout_54 = np.cov(my_functions.simulate_normal(100000, cin54, fix_method=my_functions.higham_nearestPSD()))
+cout_54 = np.cov(my_functions.simulate_normal(100000, cin54, fix_method=my_functions.higham_nearestPSD))
 check54 = cout_54 - out_54
 check54 = np.linalg.norm(check54)
 print(check54)

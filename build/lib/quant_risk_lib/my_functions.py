@@ -223,6 +223,8 @@ def chol_psd(root, a):
 
         # Diagonal element
         temp = a[j, j] - s
+        if not np.isfinite(temp):
+            raise ValueError("Encountered non-finite temp, requires adjustment")
         if 0 >= temp >= -1e-8:
             temp = 0.0
         if temp < 0:
@@ -239,6 +241,7 @@ def chol_psd(root, a):
             for i in range(j + 1, n):
                 s = np.dot(root[i, :j], root[j, :j])
                 root[i, j] = (a[i, j] - s) * ir
+
 
 
 def near_psd(a, epsilon=0.0):
@@ -445,14 +448,16 @@ def simulate_normal(N, cov, mean=None, seed=1234, fix_method=near_psd):
     try:
         l = np.linalg.cholesky(cov)  # NumPy returns upper triangular
     except np.linalg.LinAlgError:  # If not PD check PSD and then use chol_psd()
+        print("Standard Cholesky Failed: nonPD matrix input")
         try:
             chol_psd(l, cov)  # Try chol_psd with the original covariance matrix
         except ValueError:  # If chol_psd fails, matrix is not positive semi-definite
+            print("PSD Cholesky Failed: nonPSD matrix input")
             fixed_cov = fix_method(cov)  # Use fix_method to approximate a PSD matrix
             chol_psd(l, fixed_cov)  # Retry chol_psd with the fixed covariance matrix
 
     # Initialize out matrix
-    out = np.zeros((n, N))
+    # out = np.zeros((n, N))
     # Generate random standard normals
     np.random.seed(seed)
     out = np.random.normal(0.0, 1.0, size=(n, N))
