@@ -1097,6 +1097,24 @@ def aggregate_portfolio_values(values, holdings):
     return total_values
 
 
+def calculate_stock_risk_metrics(values):
+
+    grouped = values.groupby('Stock')
+
+    # Calculation of Risk Metrics for each stock
+    stockRisk = grouped.agg(
+        currentValue=('currentValue', lambda x: x.iloc[0]),
+        VaR95=('pnl', lambda x: VaR(x, alpha=0.05)),
+        ES95=('pnl', lambda x: ES(x, alpha=0.05)),
+    )
+
+    # Calculate VaR95_pct and ES95_pct
+    stockRisk['VaR95_pct'] = stockRisk['VaR95'] / stockRisk['currentValue']
+    stockRisk['ES95_pct'] = stockRisk['ES95'] / stockRisk['currentValue']
+
+    return stockRisk
+
+
 def calculate_total_risk(total_values):
     """
     Calculate the risk metrics of a portfolio
@@ -1109,8 +1127,8 @@ def calculate_total_risk(total_values):
         'currentValue': total_values['currentValue'].iloc[0],
         'VaR95': VaR(total_values['pnl'], alpha=0.05),
         'ES95': ES(total_values['pnl'], alpha=0.05),
-        # 'VaR99': VaR(total_values['pnl'], alpha=0.01),
-        # 'ES99': ES(total_values['pnl'], alpha=0.01),
+        'VaR95_pct': (VaR(total_values['pnl'], alpha=0.05) / total_values['currentValue'].iloc[0]),
+        'ES95_pct': (ES(total_values['pnl'], alpha=0.05) / total_values['currentValue'].iloc[0]),
         'Standard_Dev': np.std(total_values['pnl']),
         'min': np.min(total_values['pnl']),
         'max': np.max(total_values['pnl']),
@@ -1169,6 +1187,21 @@ def calculate_historic_var_es(returns_df, alpha):
     es = -np.mean(x[x <= var])
 
     return var, es
+
+
+def calculate_total_risk(total_values):
+    total_risk = {
+        'currentValue': total_values['currentValue'].iloc[0],
+        'VaR95': VaR(total_values['pnl'], alpha=0.05),
+        'ES95': ES(total_values['pnl'], alpha=0.05),
+        'VaR95_pct': VaR(total_values['pnl'], alpha=0.05)/total_values['currentValue'].iloc[0],
+        'ES95_pct': ES(total_values['pnl'], alpha=0.05)/total_values['currentValue'].iloc[0],
+        'Standard_Dev': np.std(total_values['pnl']),
+        'min': np.min(total_values['pnl']),
+        'max': np.max(total_values['pnl']),
+        'mean': np.mean(total_values['pnl'])
+    }
+    return total_risk
 
 
 # Fitted Models
