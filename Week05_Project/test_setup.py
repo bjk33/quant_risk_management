@@ -2,8 +2,7 @@
 import pandas as pd
 import numpy as np
 from quant_risk_lib import my_functions
-from scipy.stats import norm, t
-from scipy.optimize import minimize
+from scipy.stats import norm
 
 # Test 1 - missing covariance calculations #
 x1_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test1.csv'
@@ -411,4 +410,133 @@ print(check86)
 
 # Test 9 Var/ES Simulated Copula #
 
+cin9_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test9_1_returns.csv'
+cin9_port_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test9_1_portfolio.csv'
+cin9 = pd.read_csv(cin9_path)
+cin9_port = pd.read_csv(cin9_port_path)
+ret, portfolio = cin9, cin9_port
 
+out9_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout9_1.csv'
+out_9 = pd.read_csv(out9_path)
+
+prices = {'A': 20.0, 'B': 30}
+models = {'A': my_functions.fit_normal(ret.A)[0], 'B': my_functions.fit_general_t(ret.B)[0]}
+nSim = 100000
+
+U = np.column_stack([models['A'].u, models['B'].u])
+U_df = pd.DataFrame(U, columns=['A', 'B'])
+spcor = U_df.corr(method='spearman')
+
+uSim = my_functions.simulate_pca(spcor, nSim)
+uSim = norm.cdf(uSim).T
+
+A_evaluated = models['A'].eval_func(uSim[:, 0])
+B_evaluated = models['B'].eval_func(uSim[:, 1])
+
+
+simRet = pd.DataFrame({'A': A_evaluated, 'B': B_evaluated})
+
+portfolio = pd.DataFrame({
+    'Stock': ['A', 'B'],
+    'currentValue': [2000.0, 3000.0]
+})
+
+iterations_df = pd.DataFrame({'iteration': range(0, nSim)})
+portfolio['key'] = 1
+iterations_df['key'] = 1
+
+values = pd.merge(portfolio, iterations_df, on='key').drop('key', axis=1)
+
+nv = len(values)
+pnl = np.full(nv, np.nan, dtype=float)
+simulatedValue = pnl.copy()
+
+for i in range(nv):
+    simulatedValue[i] = values['currentValue'][i] * (1 + simRet.loc[values['iteration'][i], values['Stock'][i]])
+    pnl[i] = simulatedValue[i] - values['currentValue'][i]
+
+values['pnl'] = pnl
+values['simulatedValue'] = simulatedValue
+
+# Group the values DataFrame by 'Stock'
+grouped = values.groupby('Stock')
+
+# Calculation of Risk Metrics for each stock
+stockRisk = grouped.agg(
+    currentValue=('currentValue', lambda x: x.iloc[0]),
+    VaR95=('pnl', lambda x: my_functions.VaR(x, alpha=0.05)),
+    ES95=('pnl', lambda x: my_functions.ES(x, alpha=0.05)),
+)
+stockRisk['VaR95_pct'] = stockRisk['VaR95'] / stockRisk['currentValue']
+stockRisk['ES95_pct'] = stockRisk['ES95'] / stockRisk['currentValue']
+
+stockRisk = my_functions.calculate_stock_risk_metrics(values)
+stockRisk = stockRisk.iloc[:, 1:]
+
+# Group by iteration
+grouped_by_iteration = values.groupby('iteration')
+
+# Aggregate totals per simulation iteration
+total_values = grouped_by_iteration.agg(
+    currentValue=('currentValue', 'sum'),
+    simulatedValue=('simulatedValue', 'sum'),
+    pnl=('pnl', 'sum')
+)
+
+total_risk = my_functions.calculate_total_risk(total_values)
+totalRisk = pd.DataFrame([total_risk])
+totalRisk = totalRisk.iloc[:, 1:5]
+
+
+riskOut = pd.concat([stockRisk, totalRisk])
+last_index = riskOut.index[-1]
+new_index_name = 'Total'
+riskOut = riskOut.rename(index={last_index: new_index_name})
+
+
+riskOut = riskOut.to_numpy()
+out_9 = out_9.iloc[:, 1:]
+out_9 = out_9.to_numpy()
+
+check9 = riskOut - out_9
+check9 = np.linalg.norm(check9)
+print(check9)
+
+
+# Summary #
+
+checks = {
+    "Test 1.1:": check11,
+    "Test 1.2:": check12,
+    "Test 1.3:": check13,
+    "Test 1.4:": check14,
+    "Test 2.1:": check21,
+    "Test 2.2:": check22,
+    "Test 2.3:": check23,
+    "Test 3.1:": check31,
+    "Test 3.2:": check32,
+    "Test 3.3:": check33,
+    "Test 3.4:": check34,
+    "Test 4:": check4,
+    "Test 5.1:": check51,
+    "Test 5.2:": check52,
+    "Test 5.3:": check53,
+    "Test 5.4:": check54,
+    "Test 5.5:": check55,
+    "Test 6.1:": check61,
+    "Test 6.2:": check62,
+    "Test 7.1:": check71,
+    "Test 7.2:": check72,
+    "Test 7.3:": check73,
+    "Test 8.1:": check81,
+    "Test 8.2:": check82,
+    "Test 8.3:": check83,
+    "Test 8.4:": check84,
+    "Test 8.5:": check85,
+    "Test 8.6:": check86,
+    "Test 9:": check9,
+}
+
+print("Differences between my outputs and provided outputs:")
+for test, result in checks.items():
+    print(f"{test}: {result}")
