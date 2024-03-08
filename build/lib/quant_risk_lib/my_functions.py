@@ -368,7 +368,7 @@ def higham_nearestPSD(pc, W=None, epsilon=1e-9, maxIter=100, tol=1e-9):
     # Calculate the correlation matrix if we got a covariance
     if not np.allclose(np.diag(Yk), 1.0):
         invSD = np.diag(1.0 / np.sqrt(np.diag(Yk)))
-        out = invSD @ Yk @ invSD
+        Yk = invSD @ Yk @ invSD
 
     Yo = Yk.copy()
 
@@ -522,7 +522,7 @@ def simulate_pca(a, nsim, pctExp=1, mean=None, seed=1234):
     np.random.seed(seed)
     r = np.random.randn(vals.shape[0], nsim)
     print(B.shape, r.shape)
-    out = (B @ r).T
+    out = (B @ r)
 
     # Add the mean
     for i in range(n):
@@ -1065,7 +1065,7 @@ def calculate_var_es_ew_normal(returns_df, lambda_, alpha):
     return var, es
 
 
-def calculate_var_mle_t_dist(returns_df, alpha):
+def calculate_var_es_mle_t_dist(returns_df, alpha):
     """
     Calculate VaR using a MLE fitted t-distribution.
 
@@ -1135,7 +1135,7 @@ def general_t_ll(mu, s, nu, x):
 def fit_general_t(x):
     # Approximate values based on moments
     start_m = np.mean(x)
-    start_nu = 6.0 / kurtosis(x, fisher=False) + 4
+    start_nu = 6.0 / kurtosis(x, fisher=False, bias=False) + 4
     start_s = np.sqrt(np.var(x) * (start_nu - 2) / start_nu)
 
     # Objective function to maximize (log-likelihood)
@@ -1143,7 +1143,7 @@ def fit_general_t(x):
         return -general_t_ll(mu, s, nu, x)  # Negated for minimization
 
     # Initial parameters
-    initial_params = [start_m, start_s, start_nu]
+    initial_params = np.array([start_m, start_s, start_nu])
 
     # Bounds for s and nu
     bounds = [(None, None), (1e-6, None), (2.0001, None)]
@@ -1185,7 +1185,7 @@ def fit_regression_t(y, x):
     b_start = np.linalg.inv(__x.T @ __x) @ __x.T @ __y
     e = __y - __x @ b_start
     start_m = np.mean(e)
-    start_nu = 6.0 / stats.kurtosis(e, fisher=False) + 4
+    start_nu = 6.0 / stats.kurtosis(e, fisher=False, bias=False) + 4
     start_s = np.sqrt(np.var(e) * (start_nu - 2) / start_nu)
 
     # Optimization function
@@ -1220,7 +1220,7 @@ def fit_regression_t(y, x):
     u = t.cdf(errors, nu) * s + m
 
     fitted_model_instance = FittedModel(beta, errorModel, eval_model, errors, u)
-    return fitted_model_instance
+    return fitted_model_instance, (m, s, nu)
 
 
 def fit_normal(x):
@@ -1236,8 +1236,9 @@ def fit_normal(x):
     u = norm.cdf(x, m, s)
 
     # Function to evaluate the quantile
-    def eval(u_val):
-        return norm.ppf(u_val, m, s)
+    def eval(u):
+        return norm.ppf(u, m, s)
 
     # Return the FittedModel object
-    return FittedModel(None, error_model, eval, errors, u)
+    fitted_model = FittedModel(None, error_model, eval, errors, u)
+    return fitted_model, (u, m, s)

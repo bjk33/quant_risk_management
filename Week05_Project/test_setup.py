@@ -1,6 +1,7 @@
-from quant_risk_lib import my_functions
+# Imports
 import pandas as pd
 import numpy as np
+from quant_risk_lib import my_functions
 from scipy.stats import norm, t
 from scipy.optimize import minimize
 
@@ -210,3 +211,91 @@ cout_55 = np.cov(my_functions.simulate_pca(cin55, 100000, pctExp=0.99))
 check55 = cout_55 - out_55
 check55 = np.linalg.norm(check55)
 print(check55)
+
+# Test 6 - Return Calculation #
+cin6_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test6.csv'
+cin6 = pd.read_csv(cin6_path)
+
+out61_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout6_1.csv'
+out62_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout6_2.csv'
+out_61 = pd.read_csv(out61_path)
+out_62 = pd.read_csv(out62_path)
+
+# 6.1 Arithmetic Returns
+rout_1 = my_functions.return_calc(cin6)
+rout_1 = rout_1.iloc[:, 1:]
+out_61 = out_61.iloc[:, 1:]
+rout_1 = rout_1.to_numpy()
+out_61 = out_61.to_numpy()
+check61 = rout_1 - out_61
+check61 = np.linalg.norm(check61)
+print(check61)
+
+# 6.2 Log Returns
+rout_2 = my_functions.return_calc(cin6, 'LOG')
+rout_2 = rout_2.iloc[:, 1:]
+out_62 = out_62.iloc[:, 1:]
+rout_2 = rout_2.to_numpy()
+out_62 = out_62.to_numpy()
+check62 = rout_2 - out_62
+check62 = np.linalg.norm(check62)
+print(check62)
+
+# Test 7 - Fitting Models
+
+cin71_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test7_1.csv'
+cin72_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test7_2.csv'
+cin73_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/test7_3.csv'
+cin71 = pd.read_csv(cin71_path)
+cin72 = pd.read_csv(cin72_path)
+cin73 = pd.read_csv(cin73_path)
+
+out71_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout7_1.csv'
+out72_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout7_2.csv'
+out73_path = '/Users/brandonkaplan/Desktop/FINTECH545/tests/test_data/testout7_3.csv'
+out_71 = pd.read_csv(out71_path)
+out_72 = pd.read_csv(out72_path)
+out_73 = pd.read_csv(out73_path)
+
+# 7.1 Fit Normal Distribution
+cin71 = cin71.to_numpy()
+fd_71, params = my_functions.fit_normal(cin71)
+mu_71 = params[1]
+sigma_71 = params[2]
+cout_71 = np.array([mu_71, sigma_71])
+out_71 = out_71.to_numpy()
+check71 = cout_71 - out_71
+check71 = np.linalg.norm(check71)
+print(check71)
+
+# 7.2 T Distribution
+cin72 = cin72.to_numpy()
+cin72 = cin72.flatten()
+fd_72, params_t = my_functions.fit_general_t(cin72)
+mu_72 = params_t[0]
+sigma_72 = params_t[1]
+nu_72 = params_t[2]
+out_72 = out_72.to_numpy()
+cout_72 = np.array([mu_72, sigma_72, nu_72])
+check72 = cout_72 - out_72
+check72 = np.linalg.norm(check72)
+print(check72)
+
+# 7.3 Fit T Regression
+y = cin73.iloc[:, -1]
+xs = cin73.iloc[:, :-1]
+y = y.to_numpy()
+xs = xs.to_numpy()
+fd_73, params_treg = my_functions.fit_regression_t(y, xs)
+mu_73 = params_treg[0]
+sigma_73 = params_treg[1]
+nu_73 = params_treg[2]
+alpha = fd_73.beta[0]
+beta_1 = fd_73.beta[1]
+beta_2 = fd_73.beta[2]
+beta_3 = fd_73.beta[3]
+cout_73 = np.array([mu_73, sigma_73, nu_73, alpha, beta_1, beta_2, beta_3])
+out_73 = out_73.to_numpy()
+check73 = cout_73 - out_73
+check73 = np.linalg.norm(check73)
+print(check73)

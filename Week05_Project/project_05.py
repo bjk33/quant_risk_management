@@ -162,10 +162,10 @@ def return_calc(prices_df, method="DISCRETE", date_column="Date"):
         raise ValueError(f"dateColumn: {date_column} not in DataFrame.")
 
     # Selecting columns except the date column
-    assets = [col for col in prices.columns if col != date_column]
+    assets = [col for col in prices_df.columns if col != date_column]
 
     # Convert prices to a numpy matrix for calculations
-    p = prices[assets].values
+    p = prices_df[assets].values
 
     # Calculating the price ratios
     p2 = p[1:] / p[:-1]
@@ -180,7 +180,7 @@ def return_calc(prices_df, method="DISCRETE", date_column="Date"):
 
     # Aligning the dates with the returns
 
-    dates = prices[date_column].iloc[1:]
+    dates = prices_df[date_column].iloc[1:]
 
     # Creating a DataFrame from the returns
 
@@ -188,7 +188,7 @@ def return_calc(prices_df, method="DISCRETE", date_column="Date"):
 
     # Merging the returns with the dates
 
-    out = pd.concat([prices[date_column], returns_df], axis=1).dropna()
+    out = pd.concat([prices_df[date_column], returns_df], axis=1).dropna()
 
     return out
 
@@ -252,7 +252,7 @@ def fit_general_t(x):
         return -general_t_ll(mu, s, nu, x)  # Negated for minimization
 
     # Initial parameters
-    initial_params = [start_m, start_s, start_nu]
+    initial_params = np.array([start_m, start_s, start_nu])
 
     # Bounds for s and nu
     bounds = [(None, None), (1e-6, None), (2.0001, None)]
@@ -424,7 +424,8 @@ def simulate_pca(a, nsim, pctExp=1, mean=None, seed=1234):
     np.random.seed(seed)
     r = np.random.randn(vals.shape[0], nsim)
     print(B.shape, r.shape)
-    out = (B @ r).T
+    out = (B @ r)
+    print(out.shape)
 
     # Add the mean
     for i in range(n):
@@ -436,6 +437,7 @@ def simulate_pca(a, nsim, pctExp=1, mean=None, seed=1234):
 nsim = 5000
 # Step 1: Simulate standard normals
 standard_normals = simulate_pca(R, nsim)
+standard_normals = standard_normals.T
 
 # Step 2: Convert Standard Normals to Uniforms
 simU = pd.DataFrame(norm.cdf(standard_normals), columns=all_fitted_models.keys())
