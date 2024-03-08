@@ -337,8 +337,8 @@ cin81 = cin81.to_numpy()
 fd_81, params_81 = my_functions.fit_normal(cin81)
 sigma_81 = params_81[2]
 mu_81 = params_81[1]
-var_abs_81 = -norm.ppf(alpha, mu_81, sigma_81)
-var_diff_81 = -norm.ppf(alpha, 0, sigma_81)
+var_abs_81 = my_functions.VaR_norm(sigma_81, mu=mu_81, alpha=alpha)
+var_diff_81 = my_functions.VaR_norm(sigma_81, alpha=alpha)
 cout_81 = np.array([var_abs_81, var_diff_81])
 out_81 = out_81.to_numpy()
 check81 = cout_81 - out_81
@@ -346,3 +346,69 @@ check81 = np.linalg.norm(check81)
 print(check81)
 
 # 8.2 VaR TDist
+cin82 = cin82.to_numpy()
+cin82 = cin82.flatten()
+fd_82, params_82 = my_functions.fit_general_t(cin82)
+mu_82, sigma_82, nu_82 = params_82[0], params_82[1], params_82[2]
+var_abs_82 = my_functions.VaR_t(nu_82, sigma_82, mu=mu_82, alpha=alpha)
+var_diff_82 = my_functions.VaR_t(nu_82, sigma_82, alpha=alpha)
+cout_82 = np.array([var_abs_82, var_diff_82])
+out_82 = out_82.to_numpy()
+check82 = cout_82 - out_82
+check82 = np.linalg.norm(check82)
+print(check82)
+
+# 8.3 VaR Simulation
+cin83 = cin83.to_numpy()
+cin83 = cin83.flatten()
+fd_83, params_83 = my_functions.fit_general_t(cin83)
+sim_83 = fd_83.eval_func(np.random.rand(10000))
+var_abs_83 = my_functions.VaR(sim_83)
+var_diff_83 = my_functions.VaR(sim_83 - np.mean(sim_83))
+cout_83 = np.array([var_abs_83, var_diff_83])
+out_83 = out_83.to_numpy()
+check83 = cout_83 - out_83
+check83 = np.linalg.norm(check83)
+print(check83)
+
+# 8.4 ES Normal
+cin84 = cin84.to_numpy()
+fd_84, params_84 = my_functions.fit_normal(cin84)
+mu_84, sigma_84 = params_84[1], params_84[2]
+es_abs_84 = my_functions.ES_norm(sigma_84, mu_84, alpha=alpha)
+es_diff_84 = my_functions.ES_norm(sigma_84, alpha=alpha)
+cout_84 = np.array([es_abs_84, es_diff_84])
+out_84 = out_84.to_numpy()
+check84 = cout_84 - out_84
+check84 = np.linalg.norm(check84)
+print(check84)
+
+# 8.5 ES TDist
+cin85 = cin85.to_numpy()
+cin85 = cin85.flatten()
+fd_85, params_85 = my_functions.fit_general_t(cin85)
+mu_85, sigma_85, nu_85 = params_85[0], params_85[1], params_85[2]
+es_abs_85 = my_functions.ES_t(nu_85, sigma_85, mu=mu_85, alpha=alpha)
+es_diff_85 = my_functions.ES_t(nu_85, sigma_85, alpha=alpha)
+cout_85 = np.array([es_abs_85, es_diff_85])
+out_85 = out_85.to_numpy()
+check85 = cout_85 - out_85
+check85 = np.linalg.norm(check85)
+print(check85)
+
+# 8.6 ES Simulation
+cin86 = cin86.to_numpy()
+cin86 = cin86.flatten()
+fd_86, params_86 = my_functions.fit_general_t(cin86)
+sim_86 = fd_86.eval_func(np.random.rand(10000))
+es_abs_86 = my_functions.ES(sim_86)
+es_diff_86 = my_functions.ES(sim_86 - np.mean(sim_86))
+cout_86 = np.array([es_abs_86, es_diff_86])
+out_86 = out_86.to_numpy()
+check86 = cout_86 - out_86
+check86 = np.linalg.norm(check86)
+print(check86)
+
+# Test 9 Var/ES Simulated Copula #
+
+
