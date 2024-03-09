@@ -85,7 +85,6 @@ def calculate_var_mle_t_dist(returns, alpha):
     """
     # Fit the t-distribution to the data
     params = t.fit(returns)
-    print(params)
     df, loc, scale = params[0], params[1], params[2]  # degrees of freedom, location, and scale
 
     # Calculate the VaR
@@ -106,7 +105,7 @@ print("Series ES - MLE Fitted T-dist:", es_mle_t)
 
 
 # C) Using Historic Simulation
-
+returns = returns['x'].to_numpy()
 def VaR(a, alpha=0.05):
     x = np.sort(a)
     nup = int(np.ceil(len(a) * alpha))
@@ -116,15 +115,24 @@ def VaR(a, alpha=0.05):
     return -v
 
 
-def calculate_historic_var_es(returns_df, alpha):
-    var = VaR(returns_df, alpha=alpha)
-    x = np.sort(returns_df)
-    es = -np.mean(x[x <= var])
+def ES(a, alpha=0.05):
+    """
+    Same as VaR, except that it returns the expected shortfall (a.k.a. conditional VaR) for an input series
+    :param a: (array-like): An array of historical financial data (e.g., returns or prices).
+    :param alpha: (float, optional): The confidence level, representing the probability of
+                             exceeding the VaR. Default value is 0.05 (95% confidence level).
+    :return: -es: float: The expected shortfall or expectation of the VaR.
+    """
+    x = np.sort(a)
+    nup = int(np.ceil(len(a) * alpha))
+    ndn = int(np.floor(len(a) * alpha))
+    v = 0.5 * (x[nup] + x[ndn])
+    es = np.mean(x[x <= v])
+    return -es
 
-    return var, es
 
-
-var_hist, es_hist = calculate_historic_var_es(returns, alpha=0.05)
+var_hist = VaR(returns)
+es_hist = ES(returns)
 print("Series VaR - Historic Simulation:", var_hist)
 print("Series ES - Historic Simulation:", es_hist)
 
